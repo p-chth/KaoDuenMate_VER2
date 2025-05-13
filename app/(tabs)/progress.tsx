@@ -6,9 +6,13 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
 import { Ionicons } from '@expo/vector-icons';
+import { collection, doc, setDoc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+import { onAuthStateChanged } from 'firebase/auth';
+import { db, auth } from '@/firebaseConfig'; // Adjust path to your firebase.ts file
 
 type Task = { id: number; title: string; done: boolean };
 type Course = { id: number; title: string; tasks: Task[]; expanded: boolean };
@@ -23,113 +27,236 @@ export default function ProgressScreen() {
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
   const [newCourseTitle, setNewCourseTitle] = useState<string>('');
   const [editingTaskTitle, setEditingTaskTitle] = useState<string>('');
+  const [userId, setUserId] = useState<string | null>(null);
 
-  const addCourse = () => {
-    setCourses(prev => [
-      ...prev,
-      {
-        id: Date.now(),
-        title: `Course ${prev.length + 1}`,
-        tasks: [],
-        expanded: false,
-      },
-    ]);
+  // Listen for auth state changes
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setUserId(user.uid);
+        fetchCourses(user.uid);
+      } else {
+        setUserId(null);
+        setCourses([]);
+        Alert.alert('Please sign in to access your courses.');
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Fetch courses from Firestore
+  const fetchCourses = async (uid: string) => {
+    try {
+      const coursesCollection = collection(db, `users/${uid}/courses`);
+      const querySnapshot = await getDocs(coursesCollection);
+      const fetchedCourses: Course[] = querySnapshot.docs.map((doc) => ({
+        id: Number(doc.id),
+        title: doc.data().title,
+        tasks: doc.data().tasks || [],
+        expanded: doc.data().expanded || false,
+      }));
+      setCourses(fetchedCourses);
+    } catch (error) {
+      console.error('Error fetching courses:', error);
+      Alert.alert('Error', 'Failed to load courses.');
+    }
   };
 
-  const deleteCourse = (id: number) => {
-    setCourses(prev => prev.filter(c => c.id !== id));
+  // Add a new course
+  const addCourse = async () => {
+    if (!userId) {
+      Alert.alert('Error', 'You must be signed in to add a course.');
+      return;
+    }
+    const newCourse: Course = {
+      id: Date.now(),
+      title: `Course ${courses.length + 1}`,
+      tasks: [],
+      expanded: false,
+    };
+    try {
+      const courseRef = doc(db, `users/${userId}/courses/${newCourse.id}`);
+      await setDoc(courseRef, {
+        title: newCourse.title,
+        tasks: newCourse.tasks,
+        expanded: newCourse.expanded,
+      });
+      setCourses((prev) => [...prev, newCourse]);
+    } catch (error) {
+      console.error('Error adding course:', error);
+      Alert.alert('Error', 'Failed to add course.');
+    }
   };
 
-  const toggleTaskDone = (courseId: number, taskId: number) => {
-    setCourses(prev =>
-      prev.map(course =>
+  // Delete a course
+  const deleteCourse = async (id: number) => {
+    if (!userId) return;
+    try {
+      const courseRef = doc(db, `users/${userId}/courses/${id}`);
+      await deleteDoc(courseRef);
+      setCourses((prev) => prev.filter((c) => c.id !== id));
+    } catch (error) {
+      console.error('Error deleting course:', error);
+      Alert.alert('Error', 'Failed to delete course.');
+    }
+  };
+
+  // Toggle task done status
+  const toggleTaskDone = async (courseId: number, taskId: number) => {
+    if (!userId) return;
+    try {
+      const updatedCourses = courses.map((course) =>
         course.id === courseId
           ? {
               ...course,
-              tasks: course.tasks.map(t =>
+              tasks: course.tasks.map((t) =>
                 t.id === taskId ? { ...t, done: !t.done } : t
               ),
             }
           : course
-      )
-    );
+      );
+      const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
+      await updateDoc(courseRef, {
+        tasks: updatedCourses.find((c) => c.id === courseId)?.tasks,
+      });
+      setCourses(updatedCourses);
+    } catch (error) {
+      console.error('Error toggling task:', error);
+      Alert.alert('Error', 'Failed to update task.');
+    }
   };
 
-  const addTask = (courseId: number) => {
-    setCourses(prev =>
-      prev.map(course =>
+  // Add a new task
+  const addTask = async (courseId: number) => {
+    if (!userId) {
+      Alert.alert('Error', 'You must be signed in to add a task.');
+      return;
+    }
+    // Debug log to check courses and courseId
+    console.log('addTask: courseId:', courseId, 'courses:', courses);
+    
+    const course = courses.find((c) => c.id === courseId);
+    if (!course) {
+      Alert.alert('Error', 'Course not found. Please try again.');
+      return;
+    }
+    
+    const newTask: Task = {
+      id: Date.now(),
+      title: `Task ${course.tasks.length + 1}`,
+      done: false,
+    };
+    try {
+      const updatedCourses = courses.map((course) =>
+        course.id === courseId
+          ? { ...course, tasks: [...course.tasks, newTask] }
+          : course
+      );
+      const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
+      await updateDoc(courseRef, {
+        tasks: updatedCourses.find((c) => c.id === courseId)?.tasks,
+      });
+      setCourses(updatedCourses);
+    } catch (error) {
+      console.error('Error adding task:', error);
+      Alert.alert('Error', 'Failed to add task.');
+    }
+  };
+
+  // Delete a task
+  const deleteTask = async (courseId: number, taskId: number) => {
+    if (!userId) return;
+    try {
+      const updatedCourses = courses.map((course) =>
         course.id === courseId
           ? {
               ...course,
-              tasks: [
-                ...course.tasks,
-                {
-                  id: Date.now(),
-                  title: `Task ${course.tasks.length + 1}`,
-                  done: false,
-                },
-              ],
+              tasks: course.tasks.filter((t) => t.id !== taskId),
             }
           : course
-      )
-    );
+      );
+      const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
+      await updateDoc(courseRef, {
+        tasks: updatedCourses.find((c) => c.id === courseId)?.tasks,
+      });
+      setCourses(updatedCourses);
+    } catch (error) {
+      console.error('Error deleting task:', error);
+      Alert.alert('Error', 'Failed to delete task.');
+    }
   };
 
-  const deleteTask = (courseId: number, taskId: number) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId
-          ? {
-              ...course,
-              tasks: course.tasks.filter(t => t.id !== taskId),
-            }
-          : course
-      )
-    );
-  };
-
-  const toggleExpand = (id: number) => {
-    setCourses(prev =>
-      prev.map(course =>
+  // Toggle course expansion
+  const toggleExpand = async (id: number) => {
+    if (!userId) return;
+    try {
+      const updatedCourses = courses.map((course) =>
         course.id === id ? { ...course, expanded: !course.expanded } : course
-      )
-    );
+      );
+      const courseRef = doc(db, `users/${userId}/courses/${id}`);
+      await updateDoc(courseRef, {
+        expanded: !courses.find((c) => c.id === id)?.expanded,
+      });
+      setCourses(updatedCourses);
+    } catch (error) {
+      console.error('Error toggling expand:', error);
+      Alert.alert('Error', 'Failed to update course.');
+    }
   };
 
-  const updateTaskTitle = (
+  // Update task title
+  const updateTaskTitle = async (
     courseId: number,
     taskId: number,
     newTitle: string
   ) => {
-    setCourses(prev =>
-      prev.map(course =>
+    if (!userId) return;
+    try {
+      const updatedCourses = courses.map((course) =>
         course.id === courseId
           ? {
               ...course,
-              tasks: course.tasks.map(t =>
+              tasks: course.tasks.map((t) =>
                 t.id === taskId ? { ...t, title: newTitle } : t
               ),
             }
           : course
-      )
-    );
+      );
+      const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
+      await updateDoc(courseRef, {
+        tasks: updatedCourses.find((c) => c.id === courseId)?.tasks,
+      });
+      setCourses(updatedCourses);
+    } catch (error) {
+      console.error('Error updating task title:', error);
+      Alert.alert('Error', 'Failed to update task title.');
+    }
   };
 
-  const updateCourseTitle = (courseId: number, newTitle: string) => {
-    setCourses(prev =>
-      prev.map(course =>
-        course.id === courseId ? { ...course, title: newTitle } : course
-      )
-    );
+  // Update course title
+  const updateCourseTitle = async (courseId: number, newTitle: string) => {
+    if (!userId) return;
+    try {
+      const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
+      await updateDoc(courseRef, { title: newTitle });
+      setCourses((prev) =>
+        prev.map((course) =>
+          course.id === courseId ? { ...course, title: newTitle } : course
+        )
+      );
+    } catch (error) {
+      console.error('Error updating course title:', error);
+      Alert.alert('Error', 'Failed to update course title.');
+    }
   };
 
   const calculateCourseProgress = (tasks: Task[]) =>
-    tasks.length ? tasks.filter(t => t.done).length / tasks.length : 0;
+    tasks.length ? tasks.filter((t) => t.done).length / tasks.length : 0;
 
   const calculateOverallProgress = () => {
-    const allTasks = courses.flatMap(c => c.tasks);
+    const allTasks = courses.flatMap((c) => c.tasks);
     return allTasks.length
-      ? allTasks.filter(t => t.done).length / allTasks.length
+      ? allTasks.filter((t) => t.done).length / allTasks.length
       : 0;
   };
 
@@ -163,8 +290,8 @@ export default function ProgressScreen() {
 
         {/* White Card Box */}
         <View style={styles.whiteCard}>
-          <View style={{marginTop: 50}}></View>
-          {courses.map(course => {
+          <View style={{ marginTop: 50 }}></View>
+          {courses.map((course) => {
             const courseProgress = calculateCourseProgress(course.tasks);
             return (
               <View key={course.id} style={styles.courseCard}>
@@ -226,15 +353,13 @@ export default function ProgressScreen() {
 
                 {course.expanded && (
                   <>
-                    {course.tasks.map(task => (
+                    {course.tasks.map((task) => (
                       <View key={task.id} style={styles.taskItem}>
                         <TouchableOpacity
                           onPress={() => toggleTaskDone(course.id, task.id)}
                         >
                           <Ionicons
-                            name={
-                              task.done ? 'checkbox' : 'square-outline'
-                            }
+                            name={task.done ? 'checkbox' : 'square-outline'}
                             size={20}
                             color="black"
                           />
@@ -274,11 +399,7 @@ export default function ProgressScreen() {
                         <TouchableOpacity
                           onPress={() => deleteTask(course.id, task.id)}
                         >
-                          <Ionicons
-                            name="trash-bin"
-                            size={20}
-                            color="#6C6868"
-                          />
+                          <Ionicons name="trash-bin" size={20} color="#6C6868" />
                         </TouchableOpacity>
                       </View>
                     ))}
