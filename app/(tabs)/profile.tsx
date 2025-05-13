@@ -1,5 +1,5 @@
-import { View, Text, Button, Alert, Platform } from 'react-native';
-import { auth } from '@/firebaseConfig'; // Adjust the path as needed
+import { View, Text, Button, Alert, Platform, StyleSheet } from 'react-native';
+import { auth } from '@/firebaseConfig'; 
 import { signOut } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 
@@ -26,9 +26,18 @@ export default function HomeScreen() {
   };
 
   return (
-    <View style={{ padding: 20 }}>
+    <View style={styles.container}>
       <Text>Profile Page</Text>
       <Button title="Sign Out" onPress={handleSignOut} />
     </View>
   );
 }
+
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#FBEB77',
+  },
+})

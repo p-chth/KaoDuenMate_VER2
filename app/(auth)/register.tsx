@@ -107,7 +107,6 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   screenWrapper: {
     flex: 1,
-    backgroundColor: '#FAE86F',
   },
   container: {
     padding: 20,
