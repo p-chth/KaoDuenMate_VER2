@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
-  StyleSheet,
   TextInput,
+  StyleSheet,
+  ScrollView,
   Alert,
   Platform,
-  ScrollView,
   TouchableOpacity,
   Image,
+  Pressable,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '@/firebaseConfig';
@@ -23,6 +25,78 @@ const showAlert = (message: string) => {
   }
 };
 
+const isTouchDevice = () => {
+  if (Platform.OS !== 'web') return false;
+  return window.matchMedia('(hover: none), (pointer: coarse)').matches;
+};
+
+// --- Dropdown component ---
+interface DropdownItem {
+  label: string;
+  value: string;
+}
+
+interface DropdownProps {
+  label: string;
+  items: DropdownItem[];
+  selectedValue: string;
+  onValueChange: (value: string) => void;
+}
+
+const Dropdown: React.FC<DropdownProps> = ({
+  label,
+  items,
+  selectedValue,
+  onValueChange,
+}) => {
+  const [showList, setShowList] = useState(false);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const touchMode = isTouchDevice();
+
+  return (
+    <View style={styles.dropdownContainer}>
+      <TouchableOpacity
+        onPress={() => setShowList(!showList)}
+        style={styles.dropdownHeader}
+      >
+        <Text style={styles.dropdownText}>
+          {selectedValue ? items.find(i => i.value === selectedValue)?.label : label}
+        </Text>
+        <Ionicons name={showList ? 'chevron-up' : 'chevron-down'} size={20} />
+      </TouchableOpacity>
+
+      {showList && (
+        <View style={styles.dropdownList}>
+          {items.map(item => (
+            <Pressable
+              key={item.value}
+              onPress={() => {
+                onValueChange(item.value);
+                setShowList(false);
+                setHovered(null);
+              }}
+              onHoverIn={() => {
+                if (!touchMode) setHovered(item.value);
+              }}
+              onHoverOut={() => {
+                if (!touchMode) setHovered(null);
+              }}
+              style={({ pressed }) => [
+                styles.dropdownItem,
+                hovered === item.value && styles.dropdownItemHover,
+                pressed && styles.dropdownItemPressed,
+              ]}
+            >
+              <Text style={styles.dropdownItemText}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+    </View>
+  );
+};
+
+// --- Register screen ---
 export default function RegisterScreen() {
   const [title, setTitle] = useState('');
   const [firstName, setFirstName] = useState('');
@@ -35,7 +109,13 @@ export default function RegisterScreen() {
 
   const handleRegister = async () => {
     try {
-      if (!email || !password) return showAlert('Email and password are required');
+      if (!title || !firstName || !lastName || !studentId || !email || !password) {
+        return showAlert('Please fill in all fields');
+      }
+
+      if (!/^\d{10}$/.test(studentId)) {
+        return showAlert('Student ID must be exactly 10 digits');
+      }
 
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const uid = userCredential.user.uid;
@@ -64,11 +144,20 @@ export default function RegisterScreen() {
           <Text style={styles.appName}>KaoDuen{'\n'}Mate</Text>
         </View>
 
-        <Text style={styles.registerTitle}>Registeration</Text>
+        <Text style={styles.registerTitle}>Registration</Text>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>คำนำหน้า/Title</Text>
-          <TextInput style={styles.inputSmall} onChangeText={setTitle} />
+          <Dropdown
+            label="Select title"
+            items={[
+              { label: 'นาย (Mr.)', value: 'Mr.' },
+              { label: 'นางสาว (Ms.)', value: 'Ms.' },
+              { label: 'นาง (Mrs.)', value: 'Mrs.' },
+            ]}
+            selectedValue={title}
+            onValueChange={setTitle}
+          />
         </View>
 
         <View style={styles.inputGroup}>
@@ -83,17 +172,32 @@ export default function RegisterScreen() {
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>รหัสนิสิต/Student ID</Text>
-          <TextInput style={styles.input} keyboardType="numeric" onChangeText={setStudentId} />
+          <TextInput
+            style={styles.input}
+            keyboardType="numeric"
+            maxLength={10}
+            onChangeText={text => setStudentId(text.replace(/[^0-9]/g, ''))}
+            value={studentId}
+          />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>อีเมล/Email</Text>
-          <TextInput style={styles.input} keyboardType="email-address" onChangeText={setEmail} />
+          <TextInput
+            style={styles.input}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            onChangeText={setEmail}
+          />
         </View>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>รหัสผ่าน/Password</Text>
-          <TextInput style={styles.input} secureTextEntry={true} onChangeText={setPassword} />
+          <TextInput
+            style={styles.input}
+            secureTextEntry={true}
+            onChangeText={setPassword}
+          />
         </View>
 
         <TouchableOpacity style={styles.submitButton} onPress={handleRegister}>
@@ -107,10 +211,11 @@ export default function RegisterScreen() {
 const styles = StyleSheet.create({
   screenWrapper: {
     flex: 1,
+    backgroundColor: '#fce76c',
   },
   container: {
     padding: 20,
-    paddingBottom: 40, // Add some bottom space
+    paddingBottom: 40,
   },
   logoRow: {
     flexDirection: 'row',
@@ -123,7 +228,6 @@ const styles = StyleSheet.create({
     height: 80,
     resizeMode: 'contain',
     borderRadius: 20,
-    
   },
   appName: {
     fontSize: 26,
@@ -152,14 +256,6 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 16,
   },
-  inputSmall: {
-    backgroundColor: 'white',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    fontSize: 16,
-    width: '40%',
-  },
   submitButton: {
     backgroundColor: 'white',
     paddingVertical: 12,
@@ -171,5 +267,37 @@ const styles = StyleSheet.create({
   submitText: {
     fontSize: 18,
     fontFamily: 'Cochin',
+  },
+  dropdownContainer: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  dropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  dropdownText: {
+    fontSize: 16,
+  },
+  dropdownList: {
+    borderTopWidth: 1,
+    borderColor: '#ccc',
+  },
+  dropdownItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  dropdownItemText: {
+    fontSize: 16,
+  },
+  dropdownItemHover: {
+    backgroundColor: '#e0e0e0',
+  },
+  dropdownItemPressed: {
+    backgroundColor: '#d0d0d0',
   },
 });
