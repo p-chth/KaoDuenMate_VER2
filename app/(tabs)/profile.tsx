@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   Alert,
   Dimensions,
   TextInput,
+  StyleProp,
+  ViewStyle,
+  TextStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal';
@@ -15,6 +17,7 @@ import { doc, collection, getDoc, getDocs, onSnapshot, updateDoc } from 'firebas
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
+import { AppText } from '@/components/AppText';
 import { db, auth } from '@/firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
@@ -81,7 +84,6 @@ export default function ProfileScreen() {
     const lastActiveDate = userData.lastActiveDate || null;
     let streak = userData.streak || 0;
 
-    // Reset streak if inactive for more than a day
     if (lastActiveDate && lastActiveDate < yesterdayStr) {
       streak = 0;
       const userRef = doc(db, 'users', uid);
@@ -89,13 +91,13 @@ export default function ProfileScreen() {
         await updateDoc(userRef, {
           streak: 0,
           lastActiveDate: today,
-          lastStreakUpdate: undefined, // Changed from null to undefined
+          lastStreakUpdate: undefined,
         });
         setUserData((prev) => prev ? { 
           ...prev, 
-          streak: 0, 
-          lastActiveDate: today, 
-          lastStreakUpdate: undefined // Changed from null to undefined
+          streak: 0,
+          lastActiveDate: today,
+          lastStreakUpdate: undefined 
         } : prev);
       } catch (error) {
         console.error('Error resetting streak:', error);
@@ -291,21 +293,27 @@ export default function ProfileScreen() {
       </View>
 
       <View style={styles.whiteCard}>
-        <Text style={styles.name}>
+        <AppText style={styles.name} bold>
           {userData ? `${userData.firstName} ${userData.lastName}` : 'Loading...'}
-        </Text>
-        <Text style={styles.studentId}>
+        </AppText>
+        <AppText style={styles.studentId}>
           {userData ? userData.studentId : 'Loading...'}
-        </Text>
+        </AppText>
         <View style={styles.divider} />
 
-        <Text style={styles.sectionTitle}>Courses</Text>
+        <AppText style={styles.sectionTitle} bold>
+          Courses
+        </AppText>
         <View style={styles.coursesGrid}>
           {courses.map((course) => (
             <View key={course.id} style={styles.courseBox}>
-              <Text style={styles.courseText} numberOfLines={2} ellipsizeMode="tail">
+              <AppText
+                style={styles.courseText}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
                 {course.title}
-              </Text>
+              </AppText>
             </View>
           ))}
           {Array.from({ length: Math.max(0, 8 - courses.length) }).map((_, index) => (
@@ -313,21 +321,27 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Overview</Text>
+        <AppText style={styles.sectionTitle} bold>
+          Overview
+        </AppText>
         <View style={styles.overviewGrid}>
           <View style={styles.overviewBox}>
-            <Text style={styles.overviewText}>Streak: {userData?.streak || 0} days 🔥</Text>
+            <AppText style={styles.overviewText}>
+              Streak: {userData?.streak || 0} days 🔥
+            </AppText>
           </View>
           <View style={styles.overviewBox}>
             <TouchableOpacity onPress={() => router.push('/calendar')}>
-              <Text style={styles.overviewText}>D-Day: {calculateDDay()}</Text>
+              <AppText style={styles.overviewText}>
+                D-Day: {calculateDDay()}
+              </AppText>
             </TouchableOpacity>
           </View>
           <View style={styles.overviewBox}>
             <TouchableOpacity onPress={() => router.push('/calendar')}>
-              <Text style={styles.overviewText}>
+              <AppText style={styles.overviewText}>
                 Assignment Left: {calculateAssignmentLeft()}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </View>
           <View style={styles.overviewBox}>
@@ -343,13 +357,15 @@ export default function ProfileScreen() {
                   rotation={0}
                 />
                 <View style={styles.innerCircleWrapper}>
-                  <Text style={[styles.chartTitle, { fontSize: circleFontSize }]}>
+                  <AppText style={[styles.chartTitle, { fontSize: circleFontSize }]} bold>
                     {Math.round(overallProgress * 100)}%
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             </View>
-            <Text style={styles.overviewText}>Progress</Text>
+            <AppText style={styles.overviewText}>
+              Progress
+            </AppText>
           </View>
         </View>
       </View>
@@ -361,10 +377,14 @@ export default function ProfileScreen() {
       >
         <View style={styles.modalContent}>
           <TouchableOpacity onPress={handleEditUserData} style={styles.modalOption}>
-            <Text style={styles.modalText}>Edit User Data</Text>
+            <AppText style={styles.modalText}>
+              Edit User Data
+            </AppText>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleLogout} style={styles.modalOption}>
-            <Text style={styles.modalText}>Logout</Text>
+            <AppText style={styles.modalText}>
+              Logout
+            </AppText>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -375,7 +395,9 @@ export default function ProfileScreen() {
         style={styles.modal}
       >
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Edit Profile</Text>
+          <AppText style={styles.modalTitle} bold>
+            Edit Profile
+          </AppText>
           <TextInput
             style={styles.input}
             value={editData.firstName}
@@ -397,8 +419,10 @@ export default function ProfileScreen() {
             placeholder="Student ID"
             keyboardType="numeric"
           />
-          <TouchableOpacity onPress={saveEditData} style={styles.saveButton}>
-            <Text style={styles.saveButtonText}>Save</Text>
+          <TouchableOpacity onPress={saveEditData} style={styles.modalOption}>
+            <AppText style={styles.saveButtonText}>
+              Save
+            </AppText>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -406,7 +430,36 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  header: ViewStyle;
+  profileIcon: ViewStyle;
+  settingsIcon: ViewStyle;
+  whiteCard: ViewStyle;
+  divider: ViewStyle;
+  coursesGrid: ViewStyle;
+  courseBox: ViewStyle;
+  overviewGrid: ViewStyle;
+  overviewBox: ViewStyle;
+  progressCircleWrapper: ViewStyle;
+  chartContainer: ViewStyle;
+  backgroundCircle: ViewStyle;
+  innerCircleWrapper: ViewStyle;
+  modal: ViewStyle;
+  modalContent: ViewStyle;
+  modalOption: ViewStyle;
+  saveButton: ViewStyle;
+  name: TextStyle;
+  studentId: TextStyle;
+  sectionTitle: TextStyle;
+  courseText: TextStyle;
+  overviewText: TextStyle;
+  chartTitle: TextStyle;
+  modalText: TextStyle;
+  modalTitle: TextStyle;
+  input: TextStyle;
+  saveButtonText: TextStyle;
+}>({
   container: {
     flexGrow: 1,
     backgroundColor: '#FBEB77',
@@ -451,13 +504,10 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: isDesktop ? 30 * scaleFactor : 24 * scaleFactor,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
     textAlign: 'center',
   },
   studentId: {
     fontSize: isDesktop ? 20 * scaleFactor : 16 * scaleFactor,
-    fontFamily: 'Cochin',
     color: '#555',
     textAlign: 'center',
     marginVertical: 5 * scaleFactor,
@@ -469,8 +519,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: isDesktop ? 24 * scaleFactor : 20 * scaleFactor,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
     marginVertical: 10 * scaleFactor,
   },
   coursesGrid: {
@@ -482,7 +530,7 @@ const styles = StyleSheet.create({
   courseBox: {
     width: isDesktop ? '18%' : '22%',
     aspectRatio: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#B9E184',
     marginBottom: 10 * scaleFactor,
     justifyContent: 'center',
     alignItems: 'center',
@@ -490,12 +538,11 @@ const styles = StyleSheet.create({
   },
   courseText: {
     color: '#fff',
-    fontSize: isDesktop ? 14 * scaleFactor : 12 * scaleFactor,
-    fontFamily: 'Cochin',
+    fontSize: isDesktop ? 16 * scaleFactor : 16 * scaleFactor,
     textAlign: 'center',
     paddingHorizontal: 5 * scaleFactor,
     paddingVertical: 2 * scaleFactor,
-    flexWrap: 'wrap',
+    flexWrap: 'wrap' as const,
     maxWidth: '90%',
   },
   overviewGrid: {
@@ -537,13 +584,10 @@ const styles = StyleSheet.create({
   },
   chartTitle: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
   },
   overviewText: {
     color: '#fff',
     fontSize: isDesktop ? 18 * scaleFactor : 16 * scaleFactor,
-    fontFamily: 'Cochin',
     marginTop: 5 * scaleFactor,
   },
   modal: {
@@ -563,12 +607,10 @@ const styles = StyleSheet.create({
   },
   modalText: {
     fontSize: isDesktop ? 18 * scaleFactor : 16 * scaleFactor,
-    fontFamily: 'Cochin',
+    textAlign: 'center',
   },
   modalTitle: {
     fontSize: isDesktop ? 24 * scaleFactor : 20 * scaleFactor,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
     marginBottom: 15 * scaleFactor,
     textAlign: 'center',
   },
@@ -580,7 +622,7 @@ const styles = StyleSheet.create({
     marginBottom: 10 * scaleFactor,
     paddingHorizontal: 10 * scaleFactor,
     fontSize: isDesktop ? 16 * scaleFactor : 14 * scaleFactor,
-    fontFamily: 'Cochin',
+    fontFamily: 'CheapAsChipsDEMO',
   },
   saveButton: {
     backgroundColor: '#648dcb',
@@ -592,6 +634,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontSize: isDesktop ? 16 * scaleFactor : 14 * scaleFactor,
-    fontFamily: 'Cochin',
+    textAlign: 'center',
   },
 });

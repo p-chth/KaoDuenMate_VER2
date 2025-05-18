@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   TextInput,
   StyleSheet,
@@ -16,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import DatePicker from 'react-native-date-picker';
 import { collection, doc, setDoc, getDocs, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { AppText } from '@/components/AppText';
 import { db, auth } from '@/firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
@@ -148,7 +148,7 @@ export default function CalendarScreen() {
       const assignmentRef = doc(db, `users/${userId}/assignments/${selectedAssignment.id}`);
       await deleteDoc(assignmentRef);
       setAssignments((prev) => prev.filter((a) => a.id !== selectedAssignment.id));
-      await updateStreak(); // Call updated streak logic
+      await updateStreak();
       setIsFinishModalVisible(false);
       setSelectedAssignment(null);
       Alert.alert('Success', 'Assignment marked as finished and removed.');
@@ -172,12 +172,10 @@ export default function CalendarScreen() {
     yesterday.setDate(now.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    // Check if streak was already updated today
     if (lastStreakUpdate === today) {
-      return; // No further increment today
+      return;
     }
 
-    // Reset streak if inactive for more than a day
     if (!lastActiveDate || lastActiveDate < yesterdayStr) {
       streak = 1;
     } else if (lastActiveDate === today || lastActiveDate === yesterdayStr) {
@@ -188,7 +186,7 @@ export default function CalendarScreen() {
       await updateDoc(userRef, {
         streak: streak,
         lastActiveDate: today,
-        lastStreakUpdate: today, // Track when streak was last updated
+        lastStreakUpdate: today,
       });
     } catch (error) {
       console.error('Error updating streak:', error);
@@ -237,9 +235,9 @@ export default function CalendarScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Image source={require('@/logo.png')} style={styles.logo} />
-        <Text style={styles.headerText}>
+        <AppText style={styles.headerText} bold>
           Hello, {firstName || 'Guest'}{'\n'}Upcoming Events This Week
-        </Text>
+        </AppText>
       </View>
       <ScrollView contentContainerStyle={styles.scrollView}>
         <View style={styles.daysList}>
@@ -251,8 +249,12 @@ export default function CalendarScreen() {
                 index === eventsByDate.length - 1 ? { borderRightWidth: 0 } : {},
               ]}
             >
-              <Text style={styles.dayLabel}>{day.dayLabel}</Text>
-              <Text style={styles.dateLabel}>{day.dateLabel}</Text>
+              <AppText style={styles.dayLabel} bold>
+                {day.dayLabel}
+              </AppText>
+              <AppText style={styles.dateLabel}>
+                {day.dateLabel}
+              </AppText>
               <View style={styles.eventsArea}>
                 {events.length > 0 ? (
                   events.map((event) => (
@@ -269,13 +271,15 @@ export default function CalendarScreen() {
                         'name' in event ? styles.assignmentBox : styles.examBox,
                       ]}
                     >
-                      <Text style={styles.eventText}>
+                      <AppText style={styles.eventText}>
                         {'name' in event ? event.name : event.courseName}
-                      </Text>
+                      </AppText>
                     </TouchableOpacity>
                   ))
                 ) : (
-                  <Text style={styles.noEventsText}>No tasks</Text>
+                  <AppText style={styles.noEventsText}>
+                    No tasks
+                  </AppText>
                 )}
               </View>
             </View>
@@ -290,10 +294,14 @@ export default function CalendarScreen() {
           {!modalType ? (
             <>
               <TouchableOpacity onPress={() => setModalType('assignment')}>
-                <Text style={styles.modalOption}>Add Assignment</Text>
+                <AppText style={styles.modalOption}>
+                  Add Assignment
+                </AppText>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setModalType('exam')}>
-                <Text style={styles.modalOption}>Add Exam</Text>
+                <AppText style={styles.modalOption}>
+                  Add Exam
+                </AppText>
               </TouchableOpacity>
             </>
           ) : modalType === 'assignment' ? (
@@ -323,7 +331,9 @@ export default function CalendarScreen() {
                 />
               )}
               <TouchableOpacity onPress={addAssignment} style={styles.saveButton}>
-                <Text style={styles.saveButtonText}>Save Assignment</Text>
+                <AppText style={styles.saveButtonText}>
+                  Save Assignment
+                </AppText>
               </TouchableOpacity>
             </>
           ) : (
@@ -349,7 +359,9 @@ export default function CalendarScreen() {
                 />
               )}
               <TouchableOpacity onPress={addExam} style={styles.saveButton}>
-                <Text style={styles.saveButtonText}>Save Exam</Text>
+                <AppText style={styles.saveButtonText}>
+                  Save Exam
+                </AppText>
               </TouchableOpacity>
             </>
           )}
@@ -363,15 +375,17 @@ export default function CalendarScreen() {
         }}
       >
         <View style={styles.modalContent}>
-          <Text style={styles.modalOption}>
+          <AppText style={styles.modalOption}>
             Mark "{selectedAssignment?.name}" as finished?
-          </Text>
+          </AppText>
           <View style={styles.modalButtonContainer}>
             <TouchableOpacity
               onPress={markAssignmentAsFinished}
               style={[styles.saveButton, { backgroundColor: '#B9E184' }]}
             >
-              <Text style={styles.saveButtonText}>Confirm</Text>
+              <AppText style={styles.saveButtonText}>
+                Confirm
+              </AppText>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
@@ -380,7 +394,9 @@ export default function CalendarScreen() {
               }}
               style={[styles.saveButton, { backgroundColor: '#E03821' }]}
             >
-              <Text style={styles.saveButtonText}>Cancel</Text>
+              <AppText style={styles.saveButtonText}>
+                Cancel
+              </AppText>
             </TouchableOpacity>
           </View>
         </View>
@@ -404,7 +420,6 @@ const styles = StyleSheet.create({
   },
   headerText: {
     fontSize: 20 * scaleFactor,
-    fontWeight: 'bold',
     textAlign: 'center',
     marginLeft: 10 * scaleFactor,
   },
@@ -428,7 +443,6 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontSize: 16 * scaleFactor,
-    fontWeight: 'bold',
     textAlign: 'center',
   },
   dateLabel: {
@@ -480,7 +494,6 @@ const styles = StyleSheet.create({
   modalOption: {
     fontSize: 18 * scaleFactor,
     marginVertical: 10 * scaleFactor,
-    fontFamily: 'Cochin',
     textAlign: 'center',
   },
   modalButtonContainer: {
@@ -495,7 +508,7 @@ const styles = StyleSheet.create({
     borderRadius: 5 * scaleFactor,
     marginBottom: 10 * scaleFactor,
     paddingHorizontal: 10 * scaleFactor,
-    fontFamily: 'Cochin',
+    fontFamily: 'CheapAsChipsDEMO',
   },
   webDateInput: {
     height: 40 * scaleFactor,
@@ -505,7 +518,7 @@ const styles = StyleSheet.create({
     marginBottom: 10 * scaleFactor,
     paddingHorizontal: 10 * scaleFactor,
     fontSize: 16 * scaleFactor,
-    fontFamily: 'Cochin',
+    fontFamily: 'CheapAsChipsDEMO',
     width: '100%',
   },
   saveButton: {
@@ -518,7 +531,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontSize: 16 * scaleFactor,
-    fontFamily: 'Cochin',
   },
   logo: {
     width: 60,

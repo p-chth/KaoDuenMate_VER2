@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   TextInput,
@@ -12,6 +11,7 @@ import { AnimatedCircularProgress } from 'react-native-circular-progress';
 import { Ionicons } from '@expo/vector-icons';
 import { collection, doc, setDoc, getDoc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { AppText } from '@/components/AppText';
 import { db, auth } from '@/firebaseConfig';
 
 type Topic = { id: number; title: string; done: boolean };
@@ -118,7 +118,6 @@ export default function ProgressScreen() {
         topics: updatedCourses.find((c) => c.id === courseId)?.topics,
       });
       setCourses(updatedCourses);
-      // Update streak only if topic is marked as done
       if (updatedCourses.find((c) => c.id === courseId)?.topics.find((t) => t.id === topicId)?.done) {
         await updateStreak();
       }
@@ -253,12 +252,10 @@ export default function ProgressScreen() {
     yesterday.setDate(now.getDate() - 1);
     const yesterdayStr = yesterday.toISOString().split('T')[0];
 
-    // Check if streak was already updated today
     if (lastStreakUpdate === today) {
-      return; // No further increment today
+      return;
     }
 
-    // Reset streak if inactive for more than a day
     if (!lastActiveDate || lastActiveDate < yesterdayStr) {
       streak = 1;
     } else if (lastActiveDate === today || lastActiveDate === yesterdayStr) {
@@ -269,7 +266,7 @@ export default function ProgressScreen() {
       await updateDoc(userRef, {
         streak: streak,
         lastActiveDate: today,
-        lastStreakUpdate: today, // Track when streak was last updated
+        lastStreakUpdate: today,
       });
     } catch (error) {
       console.error('Error updating streak:', error);
@@ -307,8 +304,12 @@ export default function ProgressScreen() {
             />
             <View style={styles.innerCircleWrapper}>
               <View style={styles.textContainer}>
-                <Text style={styles.chartTitle}>Progress</Text>
-                <Text style={styles.chartTitle}>chart</Text>
+                <AppText style={styles.chartTitle} bold>
+                  Progress
+                </AppText>
+                <AppText style={styles.chartTitle} bold>
+                  chart
+                </AppText>
               </View>
             </View>
           </View>
@@ -356,7 +357,9 @@ export default function ProgressScreen() {
                       }}
                       style={{ flex: 1 }}
                     >
-                      <Text style={styles.courseTitle}>{course.title}</Text>
+                      <AppText style={styles.courseTitle} bold>
+                        {course.title}
+                      </AppText>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity onPress={() => deleteCourse(course.id)}>
@@ -371,9 +374,9 @@ export default function ProgressScreen() {
                     />
                     <View style={{ flex: 1 - courseProgress }} />
                   </View>
-                  <Text style={styles.percentText}>
+                  <AppText style={styles.percentText} bold>
                     {Math.round(courseProgress * 100)}%
-                  </Text>
+                  </AppText>
                 </View>
 
                 {course.expanded && (
@@ -417,7 +420,9 @@ export default function ProgressScreen() {
                             }}
                             style={{ flex: 1 }}
                           >
-                            <Text style={styles.topicText}>{topic.title}</Text>
+                            <AppText style={styles.topicText}>
+                              {topic.title}
+                            </AppText>
                           </TouchableOpacity>
                         )}
 
@@ -429,7 +434,9 @@ export default function ProgressScreen() {
                       </View>
                     ))}
                     <TouchableOpacity onPress={() => addTopic(course.id)}>
-                      <Text style={styles.addTopicText}>+ add topic</Text>
+                      <AppText style={styles.addTopicText} bold>
+                        + add topic
+                      </AppText>
                     </TouchableOpacity>
                   </>
                 )}
@@ -438,7 +445,9 @@ export default function ProgressScreen() {
           })}
 
           <TouchableOpacity onPress={addCourse} disabled={loading} style={styles.addCourseButton}>
-            <Text style={styles.addCourseText}>+ add course</Text>
+            <AppText style={styles.addCourseText} bold>
+              + add course
+            </AppText>
           </TouchableOpacity>
         </View>
       </View>
@@ -493,8 +502,6 @@ const styles = StyleSheet.create({
   chartTitle: {
     color: 'white',
     fontSize: 20,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
   },
   whiteCard: {
     marginTop: 130,
@@ -525,19 +532,16 @@ const styles = StyleSheet.create({
     paddingRight: 5,
   },
   courseTitle: {
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
     fontSize: 16,
     flex: 1,
   },
   courseTitleInput: {
-    fontWeight: 'bold',
     fontSize: 16,
-    fontFamily: 'Cochin',
     borderBottomWidth: 1,
     borderColor: '#888',
     paddingVertical: 2,
     flex: 1,
+    fontFamily: 'CheapAsChipsDEMO',
   },
   progressBarWrapper: {
     flexDirection: 'row',
@@ -557,8 +561,7 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   percentText: {
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
+    fontSize: 14,
   },
   topicItem: {
     flexDirection: 'row',
@@ -568,19 +571,19 @@ const styles = StyleSheet.create({
   },
   topicText: {
     flex: 1,
-    fontFamily: 'Cochin',
+    fontSize: 14,
   },
   topicInput: {
     flex: 1,
     borderBottomWidth: 1,
     borderColor: '#888',
     paddingVertical: 2,
+    fontFamily: 'CheapAsChipsDEMO',
   },
   addTopicText: {
     color: '#000',
     marginTop: 5,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
+    fontSize: 14,
   },
   addCourseButton: {
     marginTop: 20,
@@ -592,7 +595,5 @@ const styles = StyleSheet.create({
   },
   addCourseText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
   },
 });

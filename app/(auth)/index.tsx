@@ -1,36 +1,42 @@
-// app/index.tsx (Landing page)
 import React from 'react';
-import { View, Text, Button, StyleSheet, Image, TouchableOpacity,} from 'react-native';
+import { View, StyleSheet, Image, TouchableOpacity, ViewStyle, TextStyle, ImageStyle } from 'react-native';
 import { useRouter } from 'expo-router';
-
+import { AppText } from '@/components/AppText';
 
 export default function WelcomeScreen() {
-
-  const router = useRouter()
+  const router = useRouter();
 
   return (
     <View style={styles.container}>
       <View style={styles.logoContainer}>
         <Image 
-          source={require('@/logo.png')} // replace with your image path
+          source={require('@/logo.png')}
           style={styles.logo}
         />
-        <Text style={styles.title}>KaoDuen Mate</Text>
+        <AppText style={styles.title} bold>KaoDuen Mate</AppText>
       </View>
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity style={styles.button} onPress={() => router.push('/(auth)/register')}>
-          <Text style={styles.buttonText}>Register</Text>
+          <AppText style={styles.buttonText}>Register</AppText>
         </TouchableOpacity>
         <TouchableOpacity style={styles.button} onPress={() => router.push('/(auth)/login')}>
-          <Text style={styles.buttonText}>Login</Text>
+          <AppText style={styles.buttonText}>Login</AppText>
         </TouchableOpacity>
       </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  logoContainer: ViewStyle;
+  logo: ImageStyle;
+  buttonContainer: ViewStyle;
+  button: ViewStyle;
+  title: TextStyle;
+  buttonText: TextStyle;
+}>({
   container: {
     flex: 1,
     alignItems: 'center',
@@ -49,7 +55,6 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontFamily: 'Cochin',
     marginTop: 20,
   },
   buttonContainer: {
@@ -67,7 +72,5 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 18,
-    fontFamily: 'Cochin',
   },
 });
-
