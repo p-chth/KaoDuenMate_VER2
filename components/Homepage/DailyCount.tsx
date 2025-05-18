@@ -94,7 +94,7 @@ export default function DailyCount() {
     >
       <View style={styles.row}>
         <AppText style={styles.dayCount} bold>{dayCount}</AppText>
-        <Image source={fireImage} style={styles.fireImage} />
+        <Image source={fireImage} resizeMode="contain" style={styles.fireImage} />
       </View>
       <AppText style={styles.streakText} bold>Days streak</AppText>
     </View>
@@ -112,10 +112,7 @@ const styles = StyleSheet.create<{
     backgroundColor: "#FFE9E2",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 4,
+    boxShadow: "0px 2px 5px rgba(0, 0, 0, 0.1)", // Replaced shadow*
     padding: 12,
     marginVertical: 10,
     alignSelf: "center",
@@ -135,7 +132,6 @@ const styles = StyleSheet.create<{
   fireImage: {
     width: 30,
     height: 30,
-    resizeMode: "contain",
   },
   streakText: {
     fontSize: 18,

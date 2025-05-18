@@ -1,112 +1,25 @@
-import React, { useEffect, useState } from "react";
-import {
-  View,
-  StyleSheet,
-  Dimensions,
-  ActivityIndicator,
-  ViewStyle,
-  TextStyle,
-} from "react-native";
-import { getAuth, onAuthStateChanged, User } from "firebase/auth";
-import {
-  collection,
-  getDocs,
-  QueryDocumentSnapshot,
-  DocumentData,
-} from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import React from "react";
+import { View, StyleSheet, Dimensions, ViewStyle, TextStyle } from "react-native";
 import { AppText } from "@/components/AppText";
+import { Assignment } from "@/types";
 
 const screenWidth = Dimensions.get("window").width;
 
-interface Assignment {
-  id: string;
-  name: string;
-  dueDate: string;
-}
+type TaskListProps = {
+  assignments: Assignment[] | null | undefined;
+};
 
-export default function TaskList() {
-  const [assignments, setAssignments] = useState<Assignment[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [user, setUser] = useState<User | null>(null);
-
-  const getTodayFormatted = (): string => {
-    const today = new Date();
-    const yyyy = today.getFullYear();
-    const mm = String(today.getMonth() + 1).padStart(2, "0");
-    const dd = String(today.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  };
-
-  useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      if (currentUser) {
-        fetchAssignments(currentUser.uid);
-      } else {
-        setAssignments([]);
-        setLoading(false);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  const fetchAssignments = async (uid: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const assignmentsRef = collection(db, "users", uid, "assignments");
-      const snapshot = await getDocs(assignmentsRef);
-
-      const today = getTodayFormatted();
-
-      const todayAssignments: Assignment[] = snapshot.docs
-        .map((doc: QueryDocumentSnapshot<DocumentData>) => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            name: data.name,
-            dueDate: data.dueDate,
-          } as Assignment;
-        })
-        .filter((assignment) => assignment.dueDate === today);
-
-      setAssignments(todayAssignments);
-    } catch (err) {
-      console.error("Error fetching assignments:", err);
-      setError("Failed to load tasks.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <View style={[styles.container, styles.center]}>
-        <ActivityIndicator size="large" color="#000" />
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={[styles.container, styles.center]}>
-        <AppText style={styles.errorText}>{error}</AppText>
-      </View>
-    );
-  }
+export default function TaskList({ assignments }: TaskListProps) {
+  const today = new Date().toISOString().slice(0, 10);
+  const todayAssignments = (assignments || []).filter((a) => a.dueDate === today);
 
   return (
     <View style={styles.container}>
       <AppText style={styles.title} bold>🗓️ Daily Task</AppText>
-
-      {assignments.length === 0 ? (
+      {todayAssignments.length === 0 ? (
         <AppText style={styles.task}>No tasks due today.</AppText>
       ) : (
-        assignments.map((task) => (
+        todayAssignments.map((task) => (
           <AppText key={task.id} style={styles.task}>
             • {task.name}
           </AppText>
@@ -118,10 +31,8 @@ export default function TaskList() {
 
 const styles = StyleSheet.create<{
   container: ViewStyle;
-  center: ViewStyle;
   title: TextStyle;
   task: TextStyle;
-  errorText: TextStyle;
 }>({
   container: {
     width: screenWidth * 0.5,
@@ -129,14 +40,7 @@ const styles = StyleSheet.create<{
     borderRadius: 16,
     padding: 16,
     margin: 16,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  center: {
-    justifyContent: "center",
-    alignItems: "center",
+    boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.1)", // Replaced shadow*
   },
   title: {
     fontSize: 18,
@@ -150,10 +54,5 @@ const styles = StyleSheet.create<{
     fontFamily: "CheapAsChipsDEMO",
     color: "#000000",
     marginBottom: 4,
-  },
-  errorText: {
-    fontSize: 16,
-    fontFamily: "CheapAsChipsDEMO",
-    color: "red",
   },
 });

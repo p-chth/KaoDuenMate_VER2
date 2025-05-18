@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { View, StyleSheet, FlatList, Dimensions, TextStyle, ViewStyle } from "react-native";
-import { Calendar } from "react-native-calendars";
-import { getAuth } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
+import { Calendar as RNCalendar, CalendarProps as RNCalendarProps } from "react-native-calendars";
 import { AppText } from "@/components/AppText";
+import { Assignment, Exam } from "@/types";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -17,85 +15,56 @@ type EventsByDate = {
   [date: string]: Event[];
 };
 
-export default function LocalCalendar() {
+type LocalCalendarProps = {
+  assignments: Assignment[];
+  exams: Exam[];
+};
+
+export default function LocalCalendar({ assignments, exams }: LocalCalendarProps) {
   const [selectedDate, setSelectedDate] = useState<string>("");
-  const [eventsByDate, setEventsByDate] = useState<EventsByDate>({});
 
-  useEffect(() => {
-    const fetchEvents = async () => {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) return;
+  const eventsByDate: EventsByDate = {};
 
-      try {
-        const assignmentSnapshot = await getDocs(
-          collection(db, "users", user.uid, "assignments")
-        );
-        const examsSnapshot = await getDocs(
-          collection(db, "users", user.uid, "exams")
-        );
+  assignments.forEach((a) => {
+    if (a.dueDate) {
+      if (!eventsByDate[a.dueDate]) eventsByDate[a.dueDate] = [];
+      eventsByDate[a.dueDate].push({ id: a.id, summary: `Assignment: ${a.name}` });
+    }
+  });
 
-        const tempEvents: EventsByDate = {};
+  exams.forEach((e) => {
+    if (e.examDate) {
+      if (!eventsByDate[e.examDate]) eventsByDate[e.examDate] = [];
+      eventsByDate[e.examDate].push({ id: e.id, summary: `Exam: ${e.courseName}` });
+    }
+  });
 
-        const addEvent = (date: string, event: Event) => {
-          if (!tempEvents[date]) tempEvents[date] = [];
-          tempEvents[date].push(event);
-        };
-
-        assignmentSnapshot.forEach((doc) => {
-          const data = doc.data();
-          const dueDate = data.dueDate as string;
-          if (!dueDate) return;
-          addEvent(dueDate, {
-            id: doc.id,
-            summary: `Assignment: ${data.name}`,
-          });
-        });
-
-        examsSnapshot.forEach((doc) => {
-          const data = doc.data();
-          const examDate = data.examDate as string;
-          if (!examDate) return;
-          addEvent(examDate, {
-            id: doc.id,
-            summary: `Exam: ${data.courseName}`,
-          });
-        });
-
-        setEventsByDate(tempEvents);
-
-        const todayStr = new Date().toISOString().slice(0, 10);
-        if (tempEvents[todayStr]) {
-          setSelectedDate(todayStr);
-        } else {
-          const firstDate = Object.keys(tempEvents)[0] || todayStr;
-          setSelectedDate(firstDate);
-        }
-      } catch (error) {
-        console.error("Error fetching events:", error);
-      }
-    };
-
-    fetchEvents();
-  }, []);
+  // Set initial selected date
+  if (!selectedDate) {
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const firstDate = Object.keys(eventsByDate)[0] || todayStr;
+    setSelectedDate(firstDate);
+  }
 
   const events = selectedDate ? eventsByDate[selectedDate] || [] : [];
 
+  const markedDates: RNCalendarProps['markedDates'] = {
+    ...Object.keys(eventsByDate).reduce((acc, date) => {
+      acc[date] = { marked: true };
+      return acc;
+    }, {} as { [date: string]: any }),
+    [selectedDate]: {
+      selected: true,
+      marked: true,
+      selectedColor: "#648DCB",
+    },
+  };
+
   return (
     <View style={styles.container}>
-      <Calendar
+      <RNCalendar
         onDayPress={(day) => setSelectedDate(day.dateString)}
-        markedDates={{
-          ...Object.keys(eventsByDate).reduce((acc, date) => {
-            acc[date] = { marked: true };
-            return acc;
-          }, {} as { [date: string]: any }),
-          [selectedDate]: {
-            selected: true,
-            marked: true,
-            selectedColor: "#648DCB",
-          },
-        }}
+        markedDates={markedDates}
       />
       <AppText style={styles.title} bold>Events on {selectedDate}</AppText>
       <FlatList
@@ -126,10 +95,7 @@ const styles = StyleSheet.create<{
     backgroundColor: "#fff",
     padding: 12,
     borderRadius: 12,
-    shadowColor: "#000",
-    shadowOpacity: 0.1,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 5,
+    boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.1)", // Replaced shadow*
   },
   title: {
     fontSize: 16,
