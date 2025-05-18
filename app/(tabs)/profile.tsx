@@ -75,7 +75,7 @@ export default function ProfileScreen() {
   }, []);
 
   const checkAndResetStreak = async (uid: string, userData: UserData) => {
-    const now = new Date('2025-05-18');
+    const now = new Date();
     const today = now.toISOString().split('T')[0];
     const yesterday = new Date(now);
     yesterday.setDate(now.getDate() - 1);
@@ -91,17 +91,15 @@ export default function ProfileScreen() {
         await updateDoc(userRef, {
           streak: 0,
           lastActiveDate: today,
-          lastStreakUpdate: undefined,
         });
         setUserData((prev) => prev ? { 
           ...prev, 
           streak: 0,
           lastActiveDate: today,
-          lastStreakUpdate: undefined 
         } : prev);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error resetting streak:', error);
-        showAlert('Failed to reset streak.');
+        showAlert(`Failed to reset streak: ${error.message}`);
       }
     }
   };
@@ -130,9 +128,9 @@ export default function ProfileScreen() {
       } else {
         showAlert('User data not found.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching user data:', error);
-      showAlert('Failed to load user data.');
+      showAlert(`Failed to load user data: ${error.message}`);
     }
   };
 
@@ -154,7 +152,7 @@ export default function ProfileScreen() {
       }
     }, (error) => {
       console.error('Error listening to user data:', error);
-      showAlert('Failed to load user data in real time.');
+      showAlert(`Failed to load user data in real time: ${error.message}`);
     });
 
     const coursesCollection = collection(db, `users/${userId}/courses`);
@@ -163,14 +161,14 @@ export default function ProfileScreen() {
       (querySnapshot) => {
         const fetchedCourses: Course[] = querySnapshot.docs.map((doc) => ({
           id: Number(doc.id),
-          title: doc.data().title,
-          topics: doc.data().topics || [],
+          title: doc.data().title || 'Untitled',
+          topics: Array.isArray(doc.data().topics) ? doc.data().topics : [],
         }));
         setCourses(fetchedCourses);
       },
       (error) => {
         console.error('Error listening to courses:', error);
-        showAlert('Failed to load courses in real time.');
+        showAlert(`Failed to load courses in real time: ${error.message}`);
       }
     );
 
@@ -180,14 +178,31 @@ export default function ProfileScreen() {
       (querySnapshot) => {
         const fetchedAssignments: Assignment[] = querySnapshot.docs.map((doc) => ({
           id: Number(doc.id),
-          name: doc.data().name,
-          dueDate: doc.data().dueDate,
+          name: doc.data().name || 'Unnamed',
+          dueDate: doc.data().dueDate || '',
         }));
         setAssignments(fetchedAssignments);
       },
       (error) => {
         console.error('Error listening to assignments:', error);
-        showAlert('Failed to load assignments in real time.');
+        showAlert(`Failed to load assignments in real time: ${error.message}`);
+      }
+    );
+
+    const examsCollection = collection(db, `users/${userId}/exams`);
+    const unsubscribeExams = onSnapshot(
+      examsCollection,
+      (querySnapshot) => {
+        const fetchedExams: Exam[] = querySnapshot.docs.map((doc) => ({
+          id: Number(doc.id),
+          courseName: doc.data().courseName || 'Unnamed',
+          examDate: doc.data().examDate || '',
+        }));
+        setExams(fetchedExams);
+      },
+      (error) => {
+        console.error('Error listening to exams:', error);
+        showAlert(`Failed to load exams in real time: ${error.message}`);
       }
     );
 
@@ -195,22 +210,33 @@ export default function ProfileScreen() {
       unsubscribeUser();
       unsubscribeCourses();
       unsubscribeAssignments();
+      unsubscribeExams();
     };
   }, [userId]);
 
   const fetchCalendarData = async (uid: string) => {
     try {
+      const assignmentsCollection = collection(db, `users/${uid}/assignments`);
+      const assignmentsSnapshot = await getDocs(assignmentsCollection);
+      const fetchedAssignments: Assignment[] = assignmentsSnapshot.docs.map((doc) => ({
+        id: Number(doc.id),
+        name: doc.data().name || 'Unnamed',
+        dueDate: doc.data().dueDate || '',
+      }));
+
       const examsCollection = collection(db, `users/${uid}/exams`);
       const examsSnapshot = await getDocs(examsCollection);
       const fetchedExams: Exam[] = examsSnapshot.docs.map((doc) => ({
         id: Number(doc.id),
-        courseName: doc.data().courseName,
-        examDate: doc.data().examDate,
+        courseName: doc.data().courseName || 'Unnamed',
+        examDate: doc.data().examDate || '',
       }));
+
+      setAssignments(fetchedAssignments);
       setExams(fetchedExams);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching calendar data:', error);
-      showAlert('Failed to load calendar data.');
+      showAlert(`Failed to load calendar data: ${error.message}`);
     }
   };
 
@@ -222,7 +248,7 @@ export default function ProfileScreen() {
   };
 
   const calculateDDay = () => {
-    const now = new Date('2025-05-18');
+    const now = new Date();
     const allDates = [
       ...assignments.map((a) => new Date(a.dueDate)),
       ...exams.map((e) => new Date(e.examDate)),
@@ -248,28 +274,37 @@ export default function ProfileScreen() {
       showAlert('Signed out successfully!');
       router.replace('/');
     } catch (error: any) {
-      console.log('Sign out error:', error);
-      showAlert(error.message || 'Failed to sign out');
+      console.error('Sign out error:', error);
+      showAlert(`Failed to sign out: ${error.message}`);
     } finally {
       setIsSettingsVisible(false);
     }
   };
 
   const handleEditUserData = () => {
+    console.log('Opening edit modal');
     setIsEditVisible(true);
   };
 
   const saveEditData = async () => {
-    if (!userId) return;
+    if (!userId) {
+      showAlert('No user authenticated.');
+      return;
+    }
+    if (!editData.firstName.trim() || !editData.lastName.trim() || !editData.studentId.trim()) {
+      showAlert('Please fill in all fields.');
+      return;
+    }
+    console.log('Saving edit data:', editData);
     try {
       const userRef = doc(db, `users/${userId}`);
       await updateDoc(userRef, editData);
-      setUserData({ ...userData, ...editData });
+      setUserData((prev) => prev ? { ...prev, ...editData } : editData);
       setIsEditVisible(false);
       showAlert('Profile updated successfully!');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error updating user data:', error);
-      showAlert('Failed to update profile.');
+      showAlert(`Failed to update profile: ${error.message}`);
     }
   };
 
@@ -393,6 +428,7 @@ export default function ProfileScreen() {
         isVisible={isEditVisible}
         onBackdropPress={() => setIsEditVisible(false)}
         style={styles.modal}
+        avoidKeyboard={true}
       >
         <View style={styles.modalContent}>
           <AppText style={styles.modalTitle} bold>
@@ -419,11 +455,26 @@ export default function ProfileScreen() {
             placeholder="Student ID"
             keyboardType="numeric"
           />
-          <TouchableOpacity onPress={saveEditData} style={styles.modalOption}>
-            <AppText style={styles.saveButtonText}>
-              Save
-            </AppText>
-          </TouchableOpacity>
+          <View style={styles.modalButtonContainer}>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('Cancel button pressed');
+                setIsEditVisible(false);
+              }}
+              style={[styles.modalButton, styles.cancelButton]}
+            >
+              <AppText style={styles.modalButtonText}>Cancel</AppText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                console.log('Save button pressed');
+                saveEditData();
+              }}
+              style={[styles.modalButton, styles.saveButton]}
+            >
+              <AppText style={styles.saveButtonText}>Save</AppText>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </ScrollView>
@@ -448,6 +499,9 @@ const styles = StyleSheet.create<{
   modal: ViewStyle;
   modalContent: ViewStyle;
   modalOption: ViewStyle;
+  modalButtonContainer: ViewStyle;
+  modalButton: ViewStyle;
+  cancelButton: ViewStyle;
   saveButton: ViewStyle;
   name: TextStyle;
   studentId: TextStyle;
@@ -458,6 +512,7 @@ const styles = StyleSheet.create<{
   modalText: TextStyle;
   modalTitle: TextStyle;
   input: TextStyle;
+  modalButtonText: TextStyle;
   saveButtonText: TextStyle;
 }>({
   container: {
@@ -599,11 +654,30 @@ const styles = StyleSheet.create<{
     padding: isDesktop ? 30 * scaleFactor : 20 * scaleFactor,
     borderTopLeftRadius: 10 * scaleFactor,
     borderTopRightRadius: 10 * scaleFactor,
+    maxHeight: height * 0.7, // Increased for better visibility
   },
   modalOption: {
     paddingVertical: 15 * scaleFactor,
     borderBottomWidth: 1 * scaleFactor,
     borderBottomColor: '#ddd',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 15 * scaleFactor,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 10 * scaleFactor,
+    borderRadius: 5 * scaleFactor,
+    alignItems: 'center',
+    marginHorizontal: 5 * scaleFactor,
+  },
+  cancelButton: {
+    backgroundColor: '#C1C1C1',
+  },
+  saveButton: {
+    backgroundColor: '#648dcb',
   },
   modalText: {
     fontSize: isDesktop ? 18 * scaleFactor : 16 * scaleFactor,
@@ -624,16 +698,12 @@ const styles = StyleSheet.create<{
     fontSize: isDesktop ? 16 * scaleFactor : 14 * scaleFactor,
     fontFamily: 'CheapAsChipsDEMO',
   },
-  saveButton: {
-    backgroundColor: '#648dcb',
-    paddingVertical: 10 * scaleFactor,
-    borderRadius: 5 * scaleFactor,
-    alignItems: 'center',
-    marginTop: 10 * scaleFactor,
+  modalButtonText: {
+    color: '#fff',
+    fontSize: isDesktop ? 16 * scaleFactor : 14 * scaleFactor,
   },
   saveButtonText: {
     color: '#fff',
     fontSize: isDesktop ? 16 * scaleFactor : 14 * scaleFactor,
-    textAlign: 'center',
   },
 });

@@ -1,16 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { View, StyleSheet, ScrollView, ViewStyle, TextStyle } from "react-native";
-import { getAuth } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
 import { ProgressChart } from "react-native-chart-kit";
 import { AppText } from "@/components/AppText";
-
-interface Topic {
-  id: number;
-  title: string;
-  done: boolean;
-}
+import { Course, Topic } from "@/types";
 
 interface CourseProgress {
   id: string;
@@ -20,82 +12,23 @@ interface CourseProgress {
 
 const chartSize = 160;
 
-export default function CourseProgressList() {
-  const [courses, setCourses] = useState<CourseProgress[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+type CourseProgressListProps = {
+  courses: Course[];
+};
 
-  useEffect(() => {
-    const fetchCourses = async () => {
-      setLoading(true);
-      setError(null);
-      const auth = getAuth();
-      const user = auth.currentUser;
-
-      if (!user) {
-        setError("User not authenticated");
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const coursesSnap = await getDocs(
-          collection(db, "users", user.uid, "courses")
-        );
-
-        console.log("Number of courses fetched:", coursesSnap.size);
-
-        const fetchedCourses: CourseProgress[] = [];
-
-        coursesSnap.forEach((doc) => {
-          const data = doc.data();
-          const topicArray: Topic[] = Array.isArray(data.topics) ? data.topics : [];
-
-          console.log(`Course: ${data.title || "Untitled"}`);
-          console.log("Topics:", topicArray);
-
-          const total = topicArray.length;
-          const completed = topicArray.filter((t) => t.done === true).length;
-          const progress = total > 0 ? completed / total : 0;
-
-          console.log(`Total topics: ${total}, Completed: ${completed}, Progress: ${progress}`);
-
-          fetchedCourses.push({
-            id: doc.id,
-            name: data.title || "Untitled",
-            progress,
-          });
-        });
-
-        setCourses(fetchedCourses);
-      } catch (error: any) {
-        console.error("Error fetching course progress:", error);
-        setError("Failed to load courses");
-      } finally {
-        setLoading(false);
-      }
+export default function CourseProgressList({ courses }: CourseProgressListProps) {
+  const courseProgress: CourseProgress[] = courses.map((course) => {
+    const total = course.topics.length;
+    const completed = course.topics.filter((t) => t.done).length;
+    const progress = total > 0 ? completed / total : 0;
+    return {
+      id: course.id,
+      name: course.title || "Untitled",
+      progress,
     };
+  });
 
-    fetchCourses();
-  }, []);
-
-  if (loading) {
-    return (
-      <View style={styles.emptyContainer}>
-        <AppText style={styles.emptyText}>Loading courses...</AppText>
-      </View>
-    );
-  }
-
-  if (error) {
-    return (
-      <View style={styles.emptyContainer}>
-        <AppText style={styles.errorText}>{error}</AppText>
-      </View>
-    );
-  }
-
-  if (courses.length === 0) {
+  if (courseProgress.length === 0) {
     return (
       <View style={styles.emptyContainer}>
         <AppText style={styles.emptyText}>No courses found</AppText>
@@ -109,7 +42,7 @@ export default function CourseProgressList() {
       showsHorizontalScrollIndicator={false}
       contentContainerStyle={styles.listContainer}
     >
-      {courses.map((course) => (
+      {courseProgress.map((course) => (
         <View key={course.id} style={styles.courseBox}>
           <View style={{ width: chartSize, height: chartSize }}>
             <ProgressChart
@@ -151,7 +84,6 @@ const styles = StyleSheet.create<{
   percentText: TextStyle;
   emptyContainer: ViewStyle;
   emptyText: TextStyle;
-  errorText: TextStyle;
 }>({
   listContainer: {
     paddingHorizontal: 12,
@@ -164,10 +96,7 @@ const styles = StyleSheet.create<{
     marginRight: 12,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    boxShadow: "0px 2px 4px rgba(0, 0, 0, 0.05)", // Replaced shadow*
   },
   overlay: {
     position: "absolute",
@@ -197,10 +126,5 @@ const styles = StyleSheet.create<{
     fontSize: 16,
     fontFamily: "CheapAsChipsDEMO",
     color: "#000",
-  },
-  errorText: {
-    fontSize: 16,
-    fontFamily: "CheapAsChipsDEMO",
-    color: "red",
   },
 });

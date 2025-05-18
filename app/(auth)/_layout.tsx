@@ -10,7 +10,7 @@ export default function AuthLayout() {
           contentStyle: { backgroundColor: '#FBEB77' }, // Ensures background on screen area
         }}
       >
-        <Stack.Screen name="index" options={{ title: 'Landing Page' }} />
+        <Stack.Screen name="index" options={{ title: 'Welcome' }} />
         <Stack.Screen name="login" options={{ title: 'Login' }} />
         <Stack.Screen name="register" options={{ title: 'Register' }} />
       </Stack>

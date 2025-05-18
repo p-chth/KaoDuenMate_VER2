@@ -1,9 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { View, StyleSheet, ViewStyle, TextStyle } from "react-native";
-import { getAuth } from "firebase/auth";
-import { collection, getDocs } from "firebase/firestore";
-import { db } from "@/firebaseConfig";
 import { AppText } from "@/components/AppText";
+import { Assignment, Exam } from "@/types";
 
 interface Deadline {
   id: string;
@@ -11,72 +9,40 @@ interface Deadline {
   daysLeft: number;
 }
 
-export default function DeadlineList() {
-  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
+type DeadlineListProps = {
+  assignments: Assignment[];
+  exams: Exam[];
+};
 
-  useEffect(() => {
-    const fetchDeadlines = async () => {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) return;
+export default function DeadlineList({ assignments, exams }: DeadlineListProps) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+  const getDaysLeft = (dateStr: string): number => {
+    const targetDate = new Date(dateStr);
+    targetDate.setHours(0, 0, 0, 0);
+    const timeDiff = targetDate.getTime() - today.getTime();
+    return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+  };
 
-      const getDaysLeft = (dateStr: string): number => {
-        const targetDate = new Date(dateStr);
-        targetDate.setHours(0, 0, 0, 0);
-        const timeDiff = targetDate.getTime() - today.getTime();
-        return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
-      };
-
-      try {
-        const assignmentsSnap = await getDocs(
-          collection(db, "users", user.uid, "assignments")
-        );
-        const examsSnap = await getDocs(
-          collection(db, "users", user.uid, "exams")
-        );
-
-        const newDeadlines: Deadline[] = [];
-
-        assignmentsSnap.forEach((doc) => {
-          const data = doc.data();
-          if (data.dueDate) {
-            const daysLeft = getDaysLeft(data.dueDate);
-            if (daysLeft > 0) {
-              newDeadlines.push({
-                id: doc.id,
-                name: data.name || "Unnamed Assignment",
-                daysLeft,
-              });
-            }
-          }
-        });
-
-        examsSnap.forEach((doc) => {
-          const data = doc.data();
-          if (data.examDate) {
-            const daysLeft = getDaysLeft(data.examDate);
-            if (daysLeft > 0) {
-              newDeadlines.push({
-                id: doc.id,
-                name: data.courseName || "Unnamed Exam",
-                daysLeft,
-              });
-            }
-          }
-        });
-
-        newDeadlines.sort((a, b) => a.daysLeft - b.daysLeft);
-        setDeadlines(newDeadlines);
-      } catch (error) {
-        console.error("Error fetching deadlines:", error);
-      }
-    };
-
-    fetchDeadlines();
-  }, []);
+  const deadlines: Deadline[] = [
+    ...assignments
+      .filter((a) => a.dueDate)
+      .map((a) => ({
+        id: a.id,
+        name: a.name || "Unnamed Assignment",
+        daysLeft: getDaysLeft(a.dueDate),
+      })),
+    ...exams
+      .filter((e) => e.examDate)
+      .map((e) => ({
+        id: e.id,
+        name: e.courseName || "Unnamed Exam",
+        daysLeft: getDaysLeft(e.examDate),
+      })),
+  ]
+    .filter((d) => d.daysLeft > 0)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
 
   if (deadlines.length === 0) {
     return (
@@ -131,6 +97,7 @@ const styles = StyleSheet.create<{
     padding: 16,
     alignItems: "center",
     justifyContent: "space-between",
+    boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.1)", // Added boxShadow
   },
   smallDeadlinesContainer: {
     width: "50%",
@@ -168,6 +135,7 @@ const styles = StyleSheet.create<{
     paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
+    boxShadow: "0px 2px 8px rgba(0, 0, 0, 0.1)", // Added boxShadow
   },
   bigDeadlineName: {
     fontSize: 36,
