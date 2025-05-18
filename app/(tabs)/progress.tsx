@@ -27,6 +27,7 @@ export default function ProgressScreen() {
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
   const [newCourseTitle, setNewCourseTitle] = useState<string>('');
   const [editingTaskTitle, setEditingTaskTitle] = useState<string>('');
+  const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
   // Listen for auth state changes
@@ -47,20 +48,24 @@ export default function ProgressScreen() {
   // Fetch courses from Firestore
   const fetchCourses = async (uid: string) => {
     try {
+      setLoading(true); 
       const coursesCollection = collection(db, `users/${uid}/courses`);
       const querySnapshot = await getDocs(coursesCollection);
       const fetchedCourses: Course[] = querySnapshot.docs.map((doc) => ({
         id: Number(doc.id),
         title: doc.data().title,
         tasks: doc.data().tasks || [],
-        expanded: doc.data().expanded || false,
+        expanded: false,
       }));
       setCourses(fetchedCourses);
     } catch (error) {
       console.error('Error fetching courses:', error);
       Alert.alert('Error', 'Failed to load courses.');
+    } finally {
+      setLoading(false); 
     }
   };
+  
 
   // Add a new course
   const addCourse = async () => {
@@ -79,7 +84,6 @@ export default function ProgressScreen() {
       await setDoc(courseRef, {
         title: newCourse.title,
         tasks: newCourse.tasks,
-        expanded: newCourse.expanded,
       });
       setCourses((prev) => [...prev, newCourse]);
     } catch (error) {
@@ -187,22 +191,16 @@ export default function ProgressScreen() {
   };
 
   // Toggle course expansion
-  const toggleExpand = async (id: number) => {
-    if (!userId) return;
-    try {
-      const updatedCourses = courses.map((course) =>
-        course.id === id ? { ...course, expanded: !course.expanded } : course
-      );
-      const courseRef = doc(db, `users/${userId}/courses/${id}`);
-      await updateDoc(courseRef, {
-        expanded: !courses.find((c) => c.id === id)?.expanded,
-      });
-      setCourses(updatedCourses);
-    } catch (error) {
-      console.error('Error toggling expand:', error);
-      Alert.alert('Error', 'Failed to update course.');
-    }
+  const toggleExpand = (id: number) => {
+    setCourses((prevCourses) =>
+      prevCourses.map((course) =>
+        course.id === id
+          ? { ...course, expanded: !course.expanded }
+          : course
+      )
+    );
   };
+  
 
   // Update task title
   const updateTaskTitle = async (
@@ -267,7 +265,7 @@ export default function ProgressScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.relativeWrapper}>
-        {/* Overlapping Circular Progress */}
+        {/* Circular Progress */}
         <View style={styles.progressCircleWrapper}>
           <View style={styles.chartContainer}>
             <View style={styles.backgroundCircle} />
@@ -412,7 +410,7 @@ export default function ProgressScreen() {
             );
           })}
 
-          <TouchableOpacity onPress={addCourse} style={styles.addCourseButton}>
+          <TouchableOpacity onPress={addCourse} disabled={loading} style={styles.addCourseButton}>
             <Text style={styles.addCourseText}>+ add course</Text>
           </TouchableOpacity>
         </View>
