@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal';
-import { doc, collection, getDoc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, collection, getDoc, getDocs, onSnapshot, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
@@ -27,7 +27,7 @@ const scaleFactor = Math.min(width / referenceWidth, height / referenceHeight);
 // Calculate overviewBox dimensions to size the progress circle
 const overviewBoxWidthPercentage = isDesktop ? 0.23 : 0.48;
 const overviewBoxWidth = width * overviewBoxWidthPercentage;
-const aspectRatio = isDesktop ? 2.5 : 2;
+const aspectRatio = isDesktop ? 2.5 : 1.5;
 const overviewBoxHeight = overviewBoxWidth / aspectRatio;
 const circleSize = Math.min(overviewBoxWidth, overviewBoxHeight) * 0.6;
 const circleWidth = circleSize * 0.1;
@@ -36,6 +36,8 @@ const circleFontSize = circleSize * 0.25;
 type Task = { id: number; title: string; done: boolean };
 type Course = { id: number; title: string; tasks: Task[] };
 type UserData = { firstName: string; lastName: string; studentId: string };
+type Assignment = { id: number; name: string; dueDate: string };
+type Exam = { id: number; courseName: string; examDate: string };
 
 const showAlert = (message: string) => {
   Alert.alert('Notification', message);
@@ -44,6 +46,8 @@ const showAlert = (message: string) => {
 export default function ProfileScreen() {
   const [userData, setUserData] = useState<UserData | null>(null);
   const [courses, setCourses] = useState<Course[]>([]);
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
   const [userId, setUserId] = useState<string | null>(null);
   const [isSettingsVisible, setIsSettingsVisible] = useState(false);
@@ -56,10 +60,13 @@ export default function ProfileScreen() {
       if (user) {
         setUserId(user.uid);
         await fetchUserData(user.uid);
+        await fetchCalendarData(user.uid);
       } else {
         setUserId(null);
         setUserData(null);
         setCourses([]);
+        setAssignments([]);
+        setExams([]);
         showAlert('Please sign in to access your profile.');
       }
     });
@@ -114,11 +121,54 @@ export default function ProfileScreen() {
     return () => unsubscribe();
   }, [userId]);
 
+  const fetchCalendarData = async (uid: string) => {
+    try {
+      const assignmentsCollection = collection(db, `users/${uid}/assignments`);
+      const assignmentsSnapshot = await getDocs(assignmentsCollection);
+      const fetchedAssignments: Assignment[] = assignmentsSnapshot.docs.map((doc) => ({
+        id: Number(doc.id),
+        name: doc.data().name,
+        dueDate: doc.data().dueDate,
+      }));
+      setAssignments(fetchedAssignments);
+
+      const examsCollection = collection(db, `users/${uid}/exams`);
+      const examsSnapshot = await getDocs(examsCollection);
+      const fetchedExams: Exam[] = examsSnapshot.docs.map((doc) => ({
+        id: Number(doc.id),
+        courseName: doc.data().courseName,
+        examDate: doc.data().examDate,
+      }));
+      setExams(fetchedExams);
+    } catch (error) {
+      console.error('Error fetching calendar data:', error);
+      showAlert('Failed to load calendar data.');
+    }
+  };
+
   const calculateOverallProgress = () => {
     const allTasks = courses.flatMap((c) => c.tasks);
     return allTasks.length
       ? allTasks.filter((t) => t.done).length / allTasks.length
       : 0;
+  };
+
+  const calculateDDay = () => {
+    const now = new Date('2025-05-18'); // Current date: May 18, 2025
+    const allDates = [
+      ...assignments.map((a) => new Date(a.dueDate)),
+      ...exams.map((e) => new Date(e.examDate)),
+    ].filter((d) => !isNaN(d.getTime())); // Valid dates only
+    if (allDates.length === 0) return 'N/A';
+    const earliestDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
+    const diffTime = earliestDate.getTime() - now.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+    return diffDays >= 0 ? diffDays.toString() : '0'; // Show days left, or 0 if past due
+  };
+
+  const calculateAssignmentLeft = () => {
+    // Since there's no 'completed' field, assuming all assignments and exams are pending
+    return assignments.length;
   };
 
   useEffect(() => {
@@ -191,7 +241,9 @@ export default function ProfileScreen() {
         <View style={styles.coursesGrid}>
           {courses.map((course) => (
             <View key={course.id} style={styles.courseBox}>
-              <Text style={styles.courseText}>{course.title}</Text>
+              <Text style={styles.courseText} numberOfLines={2} ellipsizeMode="tail">
+                {course.title}
+              </Text>
             </View>
           ))}
           {Array.from({ length: Math.max(0, 8 - courses.length) }).map((_, index) => (
@@ -205,10 +257,16 @@ export default function ProfileScreen() {
             <Text style={styles.overviewText}>Streak: 0</Text>
           </View>
           <View style={styles.overviewBox}>
-            <Text style={styles.overviewText}>D-Day: N/A</Text>
+            <TouchableOpacity onPress={() => router.push('/calendar')}>
+              <Text style={styles.overviewText}>D-Day: {calculateDDay()}</Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.overviewBox}>
-            <Text style={styles.overviewText}>Assignment Left: 0</Text>
+            <TouchableOpacity onPress={() => router.push('/calendar')}>
+              <Text style={styles.overviewText}>
+                Assignment Left: {calculateAssignmentLeft()}
+              </Text>
+            </TouchableOpacity>
           </View>
           <View style={styles.overviewBox}>
             <View style={styles.progressCircleWrapper}>
@@ -323,7 +381,6 @@ const styles = StyleSheet.create({
     paddingTop: 50 * scaleFactor, // Increased to account for profileIcon overlap
     padding: 20 * scaleFactor,
     width: '100%',
-    // Removed height: '90%' to allow content to size naturally
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
@@ -377,6 +434,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5 * scaleFactor,
     paddingVertical: 2 * scaleFactor,
     flexWrap: 'wrap',
+    maxWidth: '90%', // Ensure text stays within box
   },
   overviewGrid: {
     flexDirection: 'row',
