@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, StyleSheet, FlatList, Dimensions } from "react-native";
+import { View, StyleSheet, FlatList, Dimensions, TextStyle, ViewStyle } from "react-native";
 import { Calendar } from "react-native-calendars";
 import { getAuth } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebaseConfig";
+import { AppText } from "@/components/AppText";
 
 const screenWidth = Dimensions.get("window").width;
 
@@ -27,11 +28,9 @@ export default function LocalCalendar() {
       if (!user) return;
 
       try {
-        // Fetch assignments
         const assignmentSnapshot = await getDocs(
           collection(db, "users", user.uid, "assignments")
         );
-        // Fetch exams
         const examsSnapshot = await getDocs(
           collection(db, "users", user.uid, "exams")
         );
@@ -43,10 +42,9 @@ export default function LocalCalendar() {
           tempEvents[date].push(event);
         };
 
-        // Process assignments
         assignmentSnapshot.forEach((doc) => {
           const data = doc.data();
-          const dueDate = data.dueDate as string; // yyyy-mm-dd
+          const dueDate = data.dueDate as string;
           if (!dueDate) return;
           addEvent(dueDate, {
             id: doc.id,
@@ -54,10 +52,9 @@ export default function LocalCalendar() {
           });
         });
 
-        // Process exams
         examsSnapshot.forEach((doc) => {
           const data = doc.data();
-          const examDate = data.examDate as string; // yyyy-mm-dd
+          const examDate = data.examDate as string;
           if (!examDate) return;
           addEvent(examDate, {
             id: doc.id,
@@ -100,26 +97,30 @@ export default function LocalCalendar() {
           },
         }}
       />
-      <Text style={styles.title}>Events on {selectedDate}</Text>
+      <AppText style={styles.title} bold>Events on {selectedDate}</AppText>
       <FlatList
         data={events}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
           <View style={styles.event}>
-            <Text style={styles.eventTitle}>{item.summary}</Text>
+            <AppText style={styles.eventTitle} bold>{item.summary}</AppText>
           </View>
         )}
         ListEmptyComponent={
-          <Text style={{ textAlign: "center", marginTop: 20 }}>
-            No events found.
-          </Text>
+          <AppText style={styles.emptyText}>No events found.</AppText>
         }
       />
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  title: TextStyle;
+  event: ViewStyle;
+  eventTitle: TextStyle;
+  emptyText: TextStyle;
+}>({
   container: {
     width: screenWidth - 40,
     backgroundColor: "#fff",
@@ -132,6 +133,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 16,
+    fontFamily: "CheapAsChipsDEMO",
     fontWeight: "600",
     marginVertical: 12,
   },
@@ -139,7 +141,14 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   eventTitle: {
-    fontWeight: "bold",
     fontSize: 14,
+    fontFamily: "CheapAsChipsDEMO",
+    fontWeight: "bold",
+  },
+  emptyText: {
+    fontSize: 14,
+    fontFamily: "CheapAsChipsDEMO",
+    textAlign: "center",
+    marginTop: 20,
   },
 });

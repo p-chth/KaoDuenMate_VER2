@@ -8,12 +8,14 @@ import DeadlineList from "@/components/Homepage/DeadlineList";
 import CourseProgressList from "@/components/Homepage/CourseProgressList";
 import {
   View,
-  Text,
   Alert,
   Platform,
   StyleSheet,
   ScrollView,
+  ViewStyle,
+  TextStyle,
 } from "react-native";
+import { AppText } from "@/components/AppText";
 
 const showAlert = (message: string) => {
   if (Platform.OS === "web") {
@@ -42,7 +44,7 @@ export default function HomeScreen() {
       </View>
 
       <View>
-        <Text style={styles.upcomingContainer}>Upcoming Events</Text>
+        <AppText style={styles.upcomingContainer} bold>Upcoming Events</AppText>
         <View style={styles.deadlineContainer}>
           <DeadlineList />
         </View>
@@ -55,7 +57,17 @@ export default function HomeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  scrollContainer: ViewStyle;
+  topContainer: ViewStyle;
+  wrapper: ViewStyle;
+  taskContainer: ViewStyle;
+  countContainer: ViewStyle;
+  calendarContainer: ViewStyle;
+  upcomingContainer: TextStyle;
+  deadlineContainer: ViewStyle;
+  courseProgressContainer: ViewStyle;
+}>({
   scrollContainer: {
     padding: 20,
     backgroundColor: "#FBEB77",
@@ -65,12 +77,12 @@ const styles = StyleSheet.create({
   topContainer: {
     flex: 1,
     backgroundColor: "#FBEB77",
-    justifyContent: "center", // <-- this vertically centers children like `.wrapper`
-    alignItems: "center", // optional: horizontally center if needed
+    justifyContent: "center",
+    alignItems: "center",
   },
   wrapper: {
     flexDirection: "row",
-    alignItems: "center", // centers content vertically within the row
+    alignItems: "center",
     justifyContent: "space-between",
     gap: 14,
   },
@@ -96,8 +108,9 @@ const styles = StyleSheet.create({
     textAlign: "left",
     overflow: "hidden",
     alignSelf: "flex-start",
-    fontWeight: "600",
     fontSize: 16,
+    fontFamily: "CheapAsChipsDEMO",
+    fontWeight: "600",
     marginTop: 10,
   },
   deadlineContainer: {

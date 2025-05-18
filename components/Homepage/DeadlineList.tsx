@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import { View, StyleSheet, ViewStyle, TextStyle } from "react-native";
 import { getAuth } from "firebase/auth";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/firebaseConfig";
+import { AppText } from "@/components/AppText";
 
 interface Deadline {
   id: string;
@@ -20,7 +21,7 @@ export default function DeadlineList() {
       if (!user) return;
 
       const today = new Date();
-      today.setHours(0, 0, 0, 0); // Clear time part for accurate comparison
+      today.setHours(0, 0, 0, 0);
 
       const getDaysLeft = (dateStr: string): number => {
         const targetDate = new Date(dateStr);
@@ -80,31 +81,32 @@ export default function DeadlineList() {
   if (deadlines.length === 0) {
     return (
       <View style={styles.container}>
-        <Text style={styles.bigDeadlineName}>🎉 No upcoming deadlines</Text>
+        <AppText style={styles.bigDeadlineName} bold>🎉 No upcoming deadlines</AppText>
       </View>
     );
   }
 
   const [bigDeadline, ...rest] = deadlines;
-  const smallDeadlines = rest.slice(0, 3); // Only show next 3 (not including today or the big one)
+  const smallDeadlines = rest.slice(0, 3);
 
   return (
     <View style={styles.container}>
       <View style={styles.bigDeadlineContainer}>
-        <Text style={styles.bigDeadlineName}>{bigDeadline.name}</Text>
-        <Text style={styles.bigDeadlineDays}>D-{bigDeadline.daysLeft}</Text>
+        <AppText style={styles.bigDeadlineName} bold>{bigDeadline.name}</AppText>
+        <AppText style={styles.bigDeadlineDays} bold>D-{bigDeadline.daysLeft}</AppText>
       </View>
       <View style={styles.smallDeadlinesContainer}>
         {smallDeadlines.map((d) => (
           <View key={d.id} style={styles.smallDeadlineItem}>
-            <Text style={styles.smallDeadlineDays}>D-{d.daysLeft}</Text>
-            <Text
+            <AppText style={styles.smallDeadlineDays} bold>D-{d.daysLeft}</AppText>
+            <AppText
               style={styles.smallDeadlineName}
+              bold
               numberOfLines={1}
               ellipsizeMode="tail"
             >
               {d.name}
-            </Text>
+            </AppText>
           </View>
         ))}
       </View>
@@ -112,7 +114,16 @@ export default function DeadlineList() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  smallDeadlinesContainer: ViewStyle;
+  smallDeadlineItem: ViewStyle;
+  smallDeadlineDays: TextStyle;
+  smallDeadlineName: TextStyle;
+  bigDeadlineContainer: ViewStyle;
+  bigDeadlineName: TextStyle;
+  bigDeadlineDays: TextStyle;
+}>({
   container: {
     flexDirection: "row",
     backgroundColor: "white",
@@ -136,6 +147,7 @@ const styles = StyleSheet.create({
   },
   smallDeadlineDays: {
     color: "#E03821",
+    fontFamily: "CheapAsChipsDEMO",
     fontWeight: "600",
     marginRight: 10,
     fontSize: 12,
@@ -143,6 +155,7 @@ const styles = StyleSheet.create({
   },
   smallDeadlineName: {
     color: "white",
+    fontFamily: "CheapAsChipsDEMO",
     fontWeight: "600",
     flexShrink: 1,
     fontSize: 12,
@@ -158,6 +171,7 @@ const styles = StyleSheet.create({
   },
   bigDeadlineName: {
     fontSize: 36,
+    fontFamily: "CheapAsChipsDEMO",
     fontWeight: "bold",
     color: "#E03821",
     marginBottom: 12,
@@ -165,6 +179,7 @@ const styles = StyleSheet.create({
   },
   bigDeadlineDays: {
     fontSize: 32,
+    fontFamily: "CheapAsChipsDEMO",
     fontWeight: "bold",
     color: "#E03821",
   },

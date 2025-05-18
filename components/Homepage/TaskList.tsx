@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import {
   View,
-  Text,
   StyleSheet,
   Dimensions,
   ActivityIndicator,
+  ViewStyle,
+  TextStyle,
 } from "react-native";
 import { getAuth, onAuthStateChanged, User } from "firebase/auth";
 import {
@@ -14,13 +15,14 @@ import {
   DocumentData,
 } from "firebase/firestore";
 import { db } from "@/firebaseConfig";
+import { AppText } from "@/components/AppText";
 
 const screenWidth = Dimensions.get("window").width;
 
 interface Assignment {
   id: string;
   name: string;
-  dueDate: string; // format: "yyyy-mm-dd"
+  dueDate: string;
 }
 
 export default function TaskList() {
@@ -29,7 +31,6 @@ export default function TaskList() {
   const [error, setError] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
 
-  // Utility to format today as yyyy-mm-dd
   const getTodayFormatted = (): string => {
     const today = new Date();
     const yyyy = today.getFullYear();
@@ -40,8 +41,6 @@ export default function TaskList() {
 
   useEffect(() => {
     const auth = getAuth();
-
-    // Listen for user auth state
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
@@ -75,8 +74,6 @@ export default function TaskList() {
         })
         .filter((assignment) => assignment.dueDate === today);
 
-      console.log("Fetched today assignments:", todayAssignments);
-
       setAssignments(todayAssignments);
     } catch (err) {
       console.error("Error fetching assignments:", err);
@@ -97,29 +94,35 @@ export default function TaskList() {
   if (error) {
     return (
       <View style={[styles.container, styles.center]}>
-        <Text style={styles.errorText}>{error}</Text>
+        <AppText style={styles.errorText}>{error}</AppText>
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🗓️ Daily Task</Text>
+      <AppText style={styles.title} bold>🗓️ Daily Task</AppText>
 
       {assignments.length === 0 ? (
-        <Text style={styles.task}>No tasks due today.</Text>
+        <AppText style={styles.task}>No tasks due today.</AppText>
       ) : (
         assignments.map((task) => (
-          <Text key={task.id} style={styles.task}>
+          <AppText key={task.id} style={styles.task}>
             • {task.name}
-          </Text>
+          </AppText>
         ))
       )}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  center: ViewStyle;
+  title: TextStyle;
+  task: TextStyle;
+  errorText: TextStyle;
+}>({
   container: {
     width: screenWidth * 0.5,
     backgroundColor: "#FFFFFF",
@@ -137,17 +140,20 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 18,
+    fontFamily: "CheapAsChipsDEMO",
     fontWeight: "bold",
     color: "#000000",
     marginBottom: 8,
   },
   task: {
     fontSize: 16,
+    fontFamily: "CheapAsChipsDEMO",
     color: "#000000",
     marginBottom: 4,
   },
   errorText: {
-    color: "red",
     fontSize: 16,
+    fontFamily: "CheapAsChipsDEMO",
+    color: "red",
   },
 });

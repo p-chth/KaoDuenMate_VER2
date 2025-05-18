@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Image, Dimensions } from "react-native";
+import { View, StyleSheet, Image, Dimensions, ViewStyle, TextStyle, ImageStyle } from "react-native";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "@/firebaseConfig";
+import { AppText } from "@/components/AppText";
 
 const fireImage = require("../../assets/images/fire.png");
 
@@ -19,8 +20,6 @@ export default function DailyCount() {
       if (!user) return;
 
       const userDocRef = doc(db, "users", user.uid);
-
-      // Get today string
       const today = new Date();
       const yyyy = today.getFullYear();
       const mm = String(today.getMonth() + 1).padStart(2, "0");
@@ -31,7 +30,6 @@ export default function DailyCount() {
         const userDocSnap = await getDoc(userDocRef);
 
         if (!userDocSnap.exists()) {
-          // First time user, initialize streak
           await setDoc(userDocRef, {
             dailyStreak: 1,
             lastOpenDate: todayStr,
@@ -41,12 +39,10 @@ export default function DailyCount() {
         }
 
         const data = userDocSnap.data();
-
         const lastOpenDateStr = data.lastOpenDate as string | undefined;
         let streak = data.dailyStreak as number | undefined;
 
         if (!lastOpenDateStr || !streak) {
-          // No streak data, initialize
           streak = 1;
           await setDoc(
             userDocRef,
@@ -65,16 +61,12 @@ export default function DailyCount() {
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
         if (diffDays === 0) {
-          // Same day, no change
         } else if (diffDays === 1) {
-          // Next day, increment streak
           streak += 1;
         } else {
-          // Missed days, reset streak
           streak = 1;
         }
 
-        // Update Firestore
         await setDoc(
           userDocRef,
           {
@@ -101,15 +93,21 @@ export default function DailyCount() {
       ]}
     >
       <View style={styles.row}>
-        <Text style={styles.dayCount}>{dayCount}</Text>
+        <AppText style={styles.dayCount} bold>{dayCount}</AppText>
         <Image source={fireImage} style={styles.fireImage} />
       </View>
-      <Text style={styles.streakText}>Days streak</Text>
+      <AppText style={styles.streakText} bold>Days streak</AppText>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  fireBadge: ViewStyle;
+  row: ViewStyle;
+  dayCount: TextStyle;
+  fireImage: ImageStyle;
+  streakText: TextStyle;
+}>({
   fireBadge: {
     backgroundColor: "#FFE9E2",
     justifyContent: "center",
@@ -129,6 +127,7 @@ const styles = StyleSheet.create({
   },
   dayCount: {
     fontSize: 24,
+    fontFamily: "CheapAsChipsDEMO",
     fontWeight: "bold",
     color: "#FF5722",
     marginRight: 8,
@@ -140,7 +139,8 @@ const styles = StyleSheet.create({
   },
   streakText: {
     fontSize: 18,
-    color: "#FF5722",
+    fontFamily: "CheapAsChipsDEMO",
     fontWeight: "700",
+    color: "#FF5722",
   },
 });
