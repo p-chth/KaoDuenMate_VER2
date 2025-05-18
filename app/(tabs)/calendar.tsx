@@ -14,7 +14,7 @@ import {
 import Modal from 'react-native-modal';
 import { Ionicons } from '@expo/vector-icons';
 import DatePicker from 'react-native-date-picker';
-import { collection, doc, setDoc, getDocs, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { db, auth } from '@/firebaseConfig';
 
@@ -36,6 +36,8 @@ export default function CalendarScreen() {
   const [newAssignmentDate, setNewAssignmentDate] = useState<Date | null>(null);
   const [newExamCourse, setNewExamCourse] = useState('');
   const [newExamDate, setNewExamDate] = useState<Date | null>(null);
+  const [isFinishModalVisible, setIsFinishModalVisible] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -140,6 +142,60 @@ export default function CalendarScreen() {
     }
   };
 
+  const markAssignmentAsFinished = async () => {
+    if (!userId || !selectedAssignment) return;
+    try {
+      const assignmentRef = doc(db, `users/${userId}/assignments/${selectedAssignment.id}`);
+      await deleteDoc(assignmentRef);
+      setAssignments((prev) => prev.filter((a) => a.id !== selectedAssignment.id));
+      await updateStreak(); // Call updated streak logic
+      setIsFinishModalVisible(false);
+      setSelectedAssignment(null);
+      Alert.alert('Success', 'Assignment marked as finished and removed.');
+    } catch (error) {
+      console.error('Error removing assignment:', error);
+      Alert.alert('Error', 'Failed to remove assignment.');
+    }
+  };
+
+  const updateStreak = async () => {
+    if (!userId) return;
+    const now = new Date('2025-05-18');
+    const today = now.toISOString().split('T')[0];
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    let streak = userDoc.exists() && userDoc.data().streak ? userDoc.data().streak : 0;
+    const lastActiveDate = userDoc.exists() && userDoc.data().lastActiveDate ? userDoc.data().lastActiveDate : null;
+    const lastStreakUpdate = userDoc.exists() && userDoc.data().lastStreakUpdate ? userDoc.data().lastStreakUpdate : null;
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    // Check if streak was already updated today
+    if (lastStreakUpdate === today) {
+      return; // No further increment today
+    }
+
+    // Reset streak if inactive for more than a day
+    if (!lastActiveDate || lastActiveDate < yesterdayStr) {
+      streak = 1;
+    } else if (lastActiveDate === today || lastActiveDate === yesterdayStr) {
+      streak += 1;
+    }
+
+    try {
+      await updateDoc(userRef, {
+        streak: streak,
+        lastActiveDate: today,
+        lastStreakUpdate: today, // Track when streak was last updated
+      });
+    } catch (error) {
+      console.error('Error updating streak:', error);
+      Alert.alert('Error', 'Failed to update streak.');
+    }
+  };
+
   const resetModal = () => {
     setModalType(null);
     setNewAssignmentName('');
@@ -157,20 +213,18 @@ export default function CalendarScreen() {
     setter(date);
   };
 
-  // Calculate the next 7 days starting from today (May 18, 2025)
   const today = new Date('2025-05-18');
   const next7Days = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     return {
       date,
-      formattedDate: date.toISOString().split('T')[0], // e.g., "2025-05-18"
-      dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }), // e.g., "Sun"
-      dateLabel: `${date.getMonth() + 1}/${date.getDate()}`, // e.g., "5/18"
+      formattedDate: date.toISOString().split('T')[0],
+      dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      dateLabel: `${date.getMonth() + 1}/${date.getDate()}`,
     };
   });
 
-  // Group events by date for the next 7 days
   const eventsByDate = next7Days.map((day) => {
     const dayEvents = [
       ...assignments.filter((a) => a.dueDate === day.formattedDate),
@@ -202,8 +256,14 @@ export default function CalendarScreen() {
               <View style={styles.eventsArea}>
                 {events.length > 0 ? (
                   events.map((event) => (
-                    <View
+                    <TouchableOpacity
                       key={event.id}
+                      onPress={() => {
+                        if ('name' in event) {
+                          setSelectedAssignment(event);
+                          setIsFinishModalVisible(true);
+                        }
+                      }}
                       style={[
                         styles.eventBox,
                         'name' in event ? styles.assignmentBox : styles.examBox,
@@ -212,7 +272,7 @@ export default function CalendarScreen() {
                       <Text style={styles.eventText}>
                         {'name' in event ? event.name : event.courseName}
                       </Text>
-                    </View>
+                    </TouchableOpacity>
                   ))
                 ) : (
                   <Text style={styles.noEventsText}>No tasks</Text>
@@ -293,6 +353,36 @@ export default function CalendarScreen() {
               </TouchableOpacity>
             </>
           )}
+        </View>
+      </Modal>
+      <Modal
+        isVisible={isFinishModalVisible}
+        onBackdropPress={() => {
+          setIsFinishModalVisible(false);
+          setSelectedAssignment(null);
+        }}
+      >
+        <View style={styles.modalContent}>
+          <Text style={styles.modalOption}>
+            Mark "{selectedAssignment?.name}" as finished?
+          </Text>
+          <View style={styles.modalButtonContainer}>
+            <TouchableOpacity
+              onPress={markAssignmentAsFinished}
+              style={[styles.saveButton, { backgroundColor: '#B9E184' }]}
+            >
+              <Text style={styles.saveButtonText}>Confirm</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setIsFinishModalVisible(false);
+                setSelectedAssignment(null);
+              }}
+              style={[styles.saveButton, { backgroundColor: '#E03821' }]}
+            >
+              <Text style={styles.saveButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
@@ -391,6 +481,12 @@ const styles = StyleSheet.create({
     fontSize: 18 * scaleFactor,
     marginVertical: 10 * scaleFactor,
     fontFamily: 'Cochin',
+    textAlign: 'center',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10 * scaleFactor,
   },
   input: {
     height: 40 * scaleFactor,
@@ -417,6 +513,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10 * scaleFactor,
     borderRadius: 5 * scaleFactor,
     alignItems: 'center',
+    width: '45%',
   },
   saveButtonText: {
     color: '#fff',
