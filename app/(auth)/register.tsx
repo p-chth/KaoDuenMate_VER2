@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import {
   View,
-  Text,
   TextInput,
   StyleSheet,
   ScrollView,
@@ -10,12 +9,16 @@ import {
   TouchableOpacity,
   Image,
   Pressable,
+  ViewStyle,
+  TextStyle,
+  ImageStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '@/firebaseConfig';
 import { doc, setDoc } from 'firebase/firestore';
+import { AppText } from '@/components/AppText';
 
 const showAlert = (message: string) => {
   if (Platform.OS === 'web') {
@@ -59,9 +62,9 @@ const Dropdown: React.FC<DropdownProps> = ({
         onPress={() => setShowList(!showList)}
         style={styles.dropdownHeader}
       >
-        <Text style={styles.dropdownText}>
+        <AppText style={styles.dropdownText}>
           {selectedValue ? items.find(i => i.value === selectedValue)?.label : label}
-        </Text>
+        </AppText>
         <Ionicons name={showList ? 'chevron-up' : 'chevron-down'} size={20} />
       </TouchableOpacity>
 
@@ -87,7 +90,7 @@ const Dropdown: React.FC<DropdownProps> = ({
                 pressed && styles.dropdownItemPressed,
               ]}
             >
-              <Text style={styles.dropdownItemText}>{item.label}</Text>
+              <AppText style={styles.dropdownItemText}>{item.label}</AppText>
             </Pressable>
           ))}
         </View>
@@ -141,15 +144,15 @@ export default function RegisterScreen() {
       <ScrollView contentContainerStyle={styles.container}>
         <View style={styles.logoRow}>
           <Image source={require('@/logo.png')} style={styles.logo} />
-          <Text style={styles.appName}>KaoDuen{'\n'}Mate</Text>
+          <AppText style={styles.appName} bold>KaoDuen{'\n'}Mate</AppText>
         </View>
 
-        <Text style={styles.registerTitle}>Registration</Text>
+        <AppText style={styles.registerTitle} bold>Registration</AppText>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>คำนำหน้า/Title</Text>
+          <AppText style={styles.label}>คำนำหน้า/Title</AppText>
           <Dropdown
-            label="Select title"
+            label='Select title'
             items={[
               { label: 'นาย (Mr.)', value: 'Mr.' },
               { label: 'นางสาว (Ms.)', value: 'Ms.' },
@@ -161,54 +164,87 @@ export default function RegisterScreen() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>ชื่อ/Name</Text>
-          <TextInput style={styles.input} onChangeText={setFirstName} />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>นามสกุล/Surname</Text>
-          <TextInput style={styles.input} onChangeText={setLastName} />
-        </View>
-
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>รหัสนิสิต/Student ID</Text>
+          <AppText style={styles.label}>ชื่อ/Name</AppText>
           <TextInput
             style={styles.input}
-            keyboardType="numeric"
+            onChangeText={setFirstName}
+            placeholder='First Name'
+            autoCapitalize='words'
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <AppText style={styles.label}>นามสกุล/Surname</AppText>
+          <TextInput
+            style={styles.input}
+            onChangeText={setLastName}
+            placeholder='Last Name'
+            autoCapitalize='words'
+          />
+        </View>
+
+        <View style={styles.inputGroup}>
+          <AppText style={styles.label}>รหัสนิสิต/Student ID</AppText>
+          <TextInput
+            style={styles.input}
+            keyboardType='numeric'
             maxLength={10}
             onChangeText={text => setStudentId(text.replace(/[^0-9]/g, ''))}
             value={studentId}
+            placeholder='Student ID'
           />
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>อีเมล/Email</Text>
+          <AppText style={styles.label}>อีเมล/Email</AppText>
           <TextInput
             style={styles.input}
-            keyboardType="email-address"
-            autoCapitalize="none"
+            keyboardType='email-address'
+            autoCapitalize='none'
             onChangeText={setEmail}
+            placeholder='Email'
           />
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>รหัสผ่าน/Password</Text>
+          <AppText style={styles.label}>รหัสผ่าน/Password</AppText>
           <TextInput
             style={styles.input}
             secureTextEntry={true}
             onChangeText={setPassword}
+            placeholder='Password'
           />
         </View>
 
         <TouchableOpacity style={styles.submitButton} onPress={handleRegister}>
-          <Text style={styles.submitText}>Submit</Text>
+          <AppText style={styles.submitText}>Submit</AppText>
         </TouchableOpacity>
       </ScrollView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  screenWrapper: ViewStyle;
+  container: ViewStyle;
+  logoRow: ViewStyle;
+  logo: ImageStyle;
+  inputGroup: ViewStyle;
+  submitButton: ViewStyle;
+  dropdownContainer: ViewStyle;
+  dropdownHeader: ViewStyle;
+  dropdownList: ViewStyle;
+  dropdownItem: ViewStyle;
+  dropdownItemHover: ViewStyle;
+  dropdownItemPressed: ViewStyle;
+  appName: TextStyle;
+  registerTitle: TextStyle;
+  label: TextStyle;
+  input: TextStyle;
+  submitText: TextStyle;
+  dropdownText: TextStyle;
+  dropdownItemText: TextStyle;
+}>({
   screenWrapper: {
     flex: 1,
     backgroundColor: '#fce76c',
@@ -232,12 +268,10 @@ const styles = StyleSheet.create({
   appName: {
     fontSize: 26,
     marginLeft: 10,
-    fontFamily: 'Cochin',
     textAlign: 'left',
   },
   registerTitle: {
     fontSize: 26,
-    fontFamily: 'Cochin',
     marginBottom: 20,
     textAlign: 'center',
   },
@@ -255,6 +289,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 10,
     fontSize: 16,
+    fontFamily: 'CheapAsChipsDEMO',
   },
   submitButton: {
     backgroundColor: 'white',
@@ -266,7 +301,6 @@ const styles = StyleSheet.create({
   },
   submitText: {
     fontSize: 18,
-    fontFamily: 'Cochin',
   },
   dropdownContainer: {
     backgroundColor: 'white',

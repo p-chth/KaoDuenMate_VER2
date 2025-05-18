@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   TouchableOpacity,
   TextInput,
   StyleSheet,
@@ -14,8 +13,9 @@ import {
 import Modal from 'react-native-modal';
 import { Ionicons } from '@expo/vector-icons';
 import DatePicker from 'react-native-date-picker';
-import { collection, doc, setDoc, getDocs, getDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, getDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
+import { AppText } from '@/components/AppText';
 import { db, auth } from '@/firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
@@ -36,6 +36,8 @@ export default function CalendarScreen() {
   const [newAssignmentDate, setNewAssignmentDate] = useState<Date | null>(null);
   const [newExamCourse, setNewExamCourse] = useState('');
   const [newExamDate, setNewExamDate] = useState<Date | null>(null);
+  const [isFinishModalVisible, setIsFinishModalVisible] = useState(false);
+  const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -140,6 +142,58 @@ export default function CalendarScreen() {
     }
   };
 
+  const markAssignmentAsFinished = async () => {
+    if (!userId || !selectedAssignment) return;
+    try {
+      const assignmentRef = doc(db, `users/${userId}/assignments/${selectedAssignment.id}`);
+      await deleteDoc(assignmentRef);
+      setAssignments((prev) => prev.filter((a) => a.id !== selectedAssignment.id));
+      await updateStreak();
+      setIsFinishModalVisible(false);
+      setSelectedAssignment(null);
+      Alert.alert('Success', 'Assignment marked as finished and removed.');
+    } catch (error) {
+      console.error('Error removing assignment:', error);
+      Alert.alert('Error', 'Failed to remove assignment.');
+    }
+  };
+
+  const updateStreak = async () => {
+    if (!userId) return;
+    const now = new Date('2025-05-18');
+    const today = now.toISOString().split('T')[0];
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    let streak = userDoc.exists() && userDoc.data().streak ? userDoc.data().streak : 0;
+    const lastActiveDate = userDoc.exists() && userDoc.data().lastActiveDate ? userDoc.data().lastActiveDate : null;
+    const lastStreakUpdate = userDoc.exists() && userDoc.data().lastStreakUpdate ? userDoc.data().lastStreakUpdate : null;
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    if (lastStreakUpdate === today) {
+      return;
+    }
+
+    if (!lastActiveDate || lastActiveDate < yesterdayStr) {
+      streak = 1;
+    } else if (lastActiveDate === today || lastActiveDate === yesterdayStr) {
+      streak += 1;
+    }
+
+    try {
+      await updateDoc(userRef, {
+        streak: streak,
+        lastActiveDate: today,
+        lastStreakUpdate: today,
+      });
+    } catch (error) {
+      console.error('Error updating streak:', error);
+      Alert.alert('Error', 'Failed to update streak.');
+    }
+  };
+
   const resetModal = () => {
     setModalType(null);
     setNewAssignmentName('');
@@ -157,20 +211,18 @@ export default function CalendarScreen() {
     setter(date);
   };
 
-  // Calculate the next 7 days starting from today (May 18, 2025)
   const today = new Date('2025-05-18');
   const next7Days = Array.from({ length: 7 }, (_, i) => {
     const date = new Date(today);
     date.setDate(today.getDate() + i);
     return {
       date,
-      formattedDate: date.toISOString().split('T')[0], // e.g., "2025-05-18"
-      dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }), // e.g., "Sun"
-      dateLabel: `${date.getMonth() + 1}/${date.getDate()}`, // e.g., "5/18"
+      formattedDate: date.toISOString().split('T')[0],
+      dayLabel: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      dateLabel: `${date.getMonth() + 1}/${date.getDate()}`,
     };
   });
 
-  // Group events by date for the next 7 days
   const eventsByDate = next7Days.map((day) => {
     const dayEvents = [
       ...assignments.filter((a) => a.dueDate === day.formattedDate),
@@ -183,9 +235,9 @@ export default function CalendarScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Image source={require('@/logo.png')} style={styles.logo} />
-        <Text style={styles.headerText}>
+        <AppText style={styles.headerText} bold>
           Hello, {firstName || 'Guest'}{'\n'}Upcoming Events This Week
-        </Text>
+        </AppText>
       </View>
       <ScrollView contentContainerStyle={styles.scrollView}>
         <View style={styles.daysList}>
@@ -197,25 +249,37 @@ export default function CalendarScreen() {
                 index === eventsByDate.length - 1 ? { borderRightWidth: 0 } : {},
               ]}
             >
-              <Text style={styles.dayLabel}>{day.dayLabel}</Text>
-              <Text style={styles.dateLabel}>{day.dateLabel}</Text>
+              <AppText style={styles.dayLabel} bold>
+                {day.dayLabel}
+              </AppText>
+              <AppText style={styles.dateLabel}>
+                {day.dateLabel}
+              </AppText>
               <View style={styles.eventsArea}>
                 {events.length > 0 ? (
                   events.map((event) => (
-                    <View
+                    <TouchableOpacity
                       key={event.id}
+                      onPress={() => {
+                        if ('name' in event) {
+                          setSelectedAssignment(event);
+                          setIsFinishModalVisible(true);
+                        }
+                      }}
                       style={[
                         styles.eventBox,
                         'name' in event ? styles.assignmentBox : styles.examBox,
                       ]}
                     >
-                      <Text style={styles.eventText}>
+                      <AppText style={styles.eventText}>
                         {'name' in event ? event.name : event.courseName}
-                      </Text>
-                    </View>
+                      </AppText>
+                    </TouchableOpacity>
                   ))
                 ) : (
-                  <Text style={styles.noEventsText}>No tasks</Text>
+                  <AppText style={styles.noEventsText}>
+                    No tasks
+                  </AppText>
                 )}
               </View>
             </View>
@@ -230,10 +294,14 @@ export default function CalendarScreen() {
           {!modalType ? (
             <>
               <TouchableOpacity onPress={() => setModalType('assignment')}>
-                <Text style={styles.modalOption}>Add Assignment</Text>
+                <AppText style={styles.modalOption}>
+                  Add Assignment
+                </AppText>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => setModalType('exam')}>
-                <Text style={styles.modalOption}>Add Exam</Text>
+                <AppText style={styles.modalOption}>
+                  Add Exam
+                </AppText>
               </TouchableOpacity>
             </>
           ) : modalType === 'assignment' ? (
@@ -263,7 +331,9 @@ export default function CalendarScreen() {
                 />
               )}
               <TouchableOpacity onPress={addAssignment} style={styles.saveButton}>
-                <Text style={styles.saveButtonText}>Save Assignment</Text>
+                <AppText style={styles.saveButtonText}>
+                  Save Assignment
+                </AppText>
               </TouchableOpacity>
             </>
           ) : (
@@ -289,10 +359,46 @@ export default function CalendarScreen() {
                 />
               )}
               <TouchableOpacity onPress={addExam} style={styles.saveButton}>
-                <Text style={styles.saveButtonText}>Save Exam</Text>
+                <AppText style={styles.saveButtonText}>
+                  Save Exam
+                </AppText>
               </TouchableOpacity>
             </>
           )}
+        </View>
+      </Modal>
+      <Modal
+        isVisible={isFinishModalVisible}
+        onBackdropPress={() => {
+          setIsFinishModalVisible(false);
+          setSelectedAssignment(null);
+        }}
+      >
+        <View style={styles.modalContent}>
+          <AppText style={styles.modalOption}>
+            Mark "{selectedAssignment?.name}" as finished?
+          </AppText>
+          <View style={styles.modalButtonContainer}>
+            <TouchableOpacity
+              onPress={markAssignmentAsFinished}
+              style={[styles.saveButton, { backgroundColor: '#B9E184' }]}
+            >
+              <AppText style={styles.saveButtonText}>
+                Confirm
+              </AppText>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                setIsFinishModalVisible(false);
+                setSelectedAssignment(null);
+              }}
+              style={[styles.saveButton, { backgroundColor: '#E03821' }]}
+            >
+              <AppText style={styles.saveButtonText}>
+                Cancel
+              </AppText>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
     </View>
@@ -314,7 +420,6 @@ const styles = StyleSheet.create({
   },
   headerText: {
     fontSize: 20 * scaleFactor,
-    fontWeight: 'bold',
     textAlign: 'center',
     marginLeft: 10 * scaleFactor,
   },
@@ -338,7 +443,6 @@ const styles = StyleSheet.create({
   },
   dayLabel: {
     fontSize: 16 * scaleFactor,
-    fontWeight: 'bold',
     textAlign: 'center',
   },
   dateLabel: {
@@ -390,7 +494,12 @@ const styles = StyleSheet.create({
   modalOption: {
     fontSize: 18 * scaleFactor,
     marginVertical: 10 * scaleFactor,
-    fontFamily: 'Cochin',
+    textAlign: 'center',
+  },
+  modalButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 10 * scaleFactor,
   },
   input: {
     height: 40 * scaleFactor,
@@ -399,7 +508,7 @@ const styles = StyleSheet.create({
     borderRadius: 5 * scaleFactor,
     marginBottom: 10 * scaleFactor,
     paddingHorizontal: 10 * scaleFactor,
-    fontFamily: 'Cochin',
+    fontFamily: 'CheapAsChipsDEMO',
   },
   webDateInput: {
     height: 40 * scaleFactor,
@@ -409,7 +518,7 @@ const styles = StyleSheet.create({
     marginBottom: 10 * scaleFactor,
     paddingHorizontal: 10 * scaleFactor,
     fontSize: 16 * scaleFactor,
-    fontFamily: 'Cochin',
+    fontFamily: 'CheapAsChipsDEMO',
     width: '100%',
   },
   saveButton: {
@@ -417,11 +526,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10 * scaleFactor,
     borderRadius: 5 * scaleFactor,
     alignItems: 'center',
+    width: '45%',
   },
   saveButtonText: {
     color: '#fff',
     fontSize: 16 * scaleFactor,
-    fontFamily: 'Cochin',
   },
   logo: {
     width: 60,
