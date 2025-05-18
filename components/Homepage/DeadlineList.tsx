@@ -1,5 +1,8 @@
-import React from "react";
-import { View, Text, StyleSheet, ScrollView } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { getAuth } from "firebase/auth";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/firebaseConfig";
 
 interface Deadline {
   id: string;
@@ -7,33 +10,90 @@ interface Deadline {
   daysLeft: number;
 }
 
-interface DeadlineListProps {
-  deadlines?: Deadline[];
-}
+export default function DeadlineList() {
+  const [deadlines, setDeadlines] = useState<Deadline[]>([]);
 
-const mockDeadlines: Deadline[] = [
-  { id: "1", name: "Assignment 1", daysLeft: 2 },
-  { id: "2", name: "Quiz 2", daysLeft: 5 },
-  { id: "3", name: "Project Proposal", daysLeft: 7 },
-  { id: "4", name: "Final Report", daysLeft: 10 },
-];
+  useEffect(() => {
+    const fetchDeadlines = async () => {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) return;
 
-export default function DeadlineList({
-  deadlines = mockDeadlines,
-}: DeadlineListProps) {
-  // Big deadline = nearest deadline
-  const [bigDeadline, ...smallDeadlines] = deadlines.sort(
-    (a, b) => a.daysLeft - b.daysLeft
-  );
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Clear time part for accurate comparison
+
+      const getDaysLeft = (dateStr: string): number => {
+        const targetDate = new Date(dateStr);
+        targetDate.setHours(0, 0, 0, 0);
+        const timeDiff = targetDate.getTime() - today.getTime();
+        return Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+      };
+
+      try {
+        const assignmentsSnap = await getDocs(
+          collection(db, "users", user.uid, "assignments")
+        );
+        const examsSnap = await getDocs(
+          collection(db, "users", user.uid, "exams")
+        );
+
+        const newDeadlines: Deadline[] = [];
+
+        assignmentsSnap.forEach((doc) => {
+          const data = doc.data();
+          if (data.dueDate) {
+            const daysLeft = getDaysLeft(data.dueDate);
+            if (daysLeft > 0) {
+              newDeadlines.push({
+                id: doc.id,
+                name: data.name || "Unnamed Assignment",
+                daysLeft,
+              });
+            }
+          }
+        });
+
+        examsSnap.forEach((doc) => {
+          const data = doc.data();
+          if (data.examDate) {
+            const daysLeft = getDaysLeft(data.examDate);
+            if (daysLeft > 0) {
+              newDeadlines.push({
+                id: doc.id,
+                name: data.courseName || "Unnamed Exam",
+                daysLeft,
+              });
+            }
+          }
+        });
+
+        newDeadlines.sort((a, b) => a.daysLeft - b.daysLeft);
+        setDeadlines(newDeadlines);
+      } catch (error) {
+        console.error("Error fetching deadlines:", error);
+      }
+    };
+
+    fetchDeadlines();
+  }, []);
+
+  if (deadlines.length === 0) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.bigDeadlineName}>🎉 No upcoming deadlines</Text>
+      </View>
+    );
+  }
+
+  const [bigDeadline, ...rest] = deadlines;
+  const smallDeadlines = rest.slice(0, 3); // Only show next 3 (not including today or the big one)
 
   return (
     <View style={styles.container}>
-      {bigDeadline && (
-        <View style={styles.bigDeadlineContainer}>
-          <Text style={styles.bigDeadlineName}>{bigDeadline.name}</Text>
-          <Text style={styles.bigDeadlineDays}>D-{bigDeadline.daysLeft}</Text>
-        </View>
-      )}
+      <View style={styles.bigDeadlineContainer}>
+        <Text style={styles.bigDeadlineName}>{bigDeadline.name}</Text>
+        <Text style={styles.bigDeadlineDays}>D-{bigDeadline.daysLeft}</Text>
+      </View>
       <View style={styles.smallDeadlinesContainer}>
         {smallDeadlines.map((d) => (
           <View key={d.id} style={styles.smallDeadlineItem}>
@@ -62,7 +122,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   smallDeadlinesContainer: {
-    width: "50%", // half width of container
+    width: "50%",
     justifyContent: "space-around",
   },
   smallDeadlineItem: {
@@ -78,35 +138,33 @@ const styles = StyleSheet.create({
     color: "#E03821",
     fontWeight: "600",
     marginRight: 10,
-    fontSize: 12, // smaller font size
+    fontSize: 12,
     width: 40,
   },
   smallDeadlineName: {
     color: "white",
     fontWeight: "600",
-    flexShrink: 1, // allow text to truncate if too long
-    fontSize: 12, // smaller font size
+    flexShrink: 1,
+    fontSize: 12,
   },
   bigDeadlineContainer: {
-    width: "45%", // a bit less than 50% to keep spacing
+    width: "45%",
     backgroundColor: "white",
     borderRadius: 20,
     paddingVertical: 20,
     paddingHorizontal: 16,
     alignItems: "center",
     justifyContent: "center",
-    borderWidth: 1,
-    borderColor: "#E03821",
   },
   bigDeadlineName: {
-    fontSize: 18, // you can adjust if needed
+    fontSize: 36,
     fontWeight: "bold",
     color: "#E03821",
     marginBottom: 12,
     textAlign: "center",
   },
   bigDeadlineDays: {
-    fontSize: 22,
+    fontSize: 32,
     fontWeight: "bold",
     color: "#E03821",
   },

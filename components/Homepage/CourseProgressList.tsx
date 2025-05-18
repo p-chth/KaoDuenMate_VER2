@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView } from "react-native";
+import { getAuth } from "firebase/auth";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/firebaseConfig";
 import { ProgressChart } from "react-native-chart-kit";
 
 interface CourseProgress {
@@ -8,21 +11,50 @@ interface CourseProgress {
   progress: number;
 }
 
-const mockData: CourseProgress[] = [
-  { id: "1", name: "Math", progress: 0.65 },
-  { id: "2", name: "Physics", progress: 0.35 },
-  { id: "3", name: "Chemistry", progress: 0.85 },
-  { id: "4", name: "Biology", progress: 0.55 },
-];
-
-// 👇 Increase chart size here
 const chartSize = 160;
 
-export default function CourseProgressList({
-  courses = mockData,
-}: {
-  courses?: CourseProgress[];
-}) {
+export default function CourseProgressList() {
+  const [courses, setCourses] = useState<CourseProgress[]>([]);
+
+  useEffect(() => {
+    const fetchCourses = async () => {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) return;
+
+      try {
+        const coursesSnap = await getDocs(
+          collection(db, "users", user.uid, "courses")
+        );
+
+        const fetchedCourses: CourseProgress[] = [];
+
+        coursesSnap.forEach((doc) => {
+          const data = doc.data();
+          const taskArray = Array.isArray(data.tasks) ? data.tasks : [];
+
+          console.log("Course:", data.title, "Tasks:", taskArray);
+
+          const total = taskArray.length;
+          const completed = taskArray.filter((t: any) => t.done).length;
+          const progress = total > 0 ? completed / total : 0;
+
+          fetchedCourses.push({
+            id: doc.id,
+            name: data.title || "Untitled",
+            progress,
+          });
+        });
+
+        setCourses(fetchedCourses);
+      } catch (error) {
+        console.error("Error fetching course progress:", error);
+      }
+    };
+
+    fetchCourses();
+  }, []);
+
   return (
     <ScrollView
       horizontal
@@ -36,8 +68,8 @@ export default function CourseProgressList({
               data={{ data: [course.progress] }}
               width={chartSize}
               height={chartSize}
-              strokeWidth={14} // thicker arc
-              radius={40} // adjust to match size
+              strokeWidth={14}
+              radius={40}
               hideLegend
               chartConfig={{
                 backgroundGradientFrom: "#fff",
@@ -45,7 +77,7 @@ export default function CourseProgressList({
                 color: (opacity = 1) => `rgba(185, 225, 133, ${opacity})`,
                 backgroundColor: "#fff",
                 propsForBackgroundLines: {
-                  stroke: "#BBBBBB", // base circle color
+                  stroke: "#BBBBBB",
                 },
               }}
               style={{ position: "absolute" }}
