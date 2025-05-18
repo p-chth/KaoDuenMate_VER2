@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
   Alert,
   Dimensions,
   TextInput,
+  StyleProp,
+  ViewStyle,
+  TextStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Modal from 'react-native-modal';
@@ -15,16 +17,15 @@ import { doc, collection, getDoc, getDocs, onSnapshot, updateDoc } from 'firebas
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import { useRouter } from 'expo-router';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
+import { AppText } from '@/components/AppText';
 import { db, auth } from '@/firebaseConfig';
 
-// Calculate scaling factor based on dimensions
 const { width, height } = Dimensions.get('window');
 const isDesktop = width > 768;
 const referenceWidth = isDesktop ? 1200 : 414;
 const referenceHeight = isDesktop ? 800 : 896;
 const scaleFactor = Math.min(width / referenceWidth, height / referenceHeight);
 
-// Calculate overviewBox dimensions to size the progress circle
 const overviewBoxWidthPercentage = isDesktop ? 0.23 : 0.48;
 const overviewBoxWidth = width * overviewBoxWidthPercentage;
 const aspectRatio = isDesktop ? 2.5 : 1.5;
@@ -33,9 +34,9 @@ const circleSize = Math.min(overviewBoxWidth, overviewBoxHeight) * 0.6;
 const circleWidth = circleSize * 0.1;
 const circleFontSize = circleSize * 0.25;
 
-type Task = { id: number; title: string; done: boolean };
-type Course = { id: number; title: string; tasks: Task[] };
-type UserData = { firstName: string; lastName: string; studentId: string };
+type Topic = { id: number; title: string; done: boolean };
+type Course = { id: number; title: string; topics: Topic[] };
+type UserData = { firstName: string; lastName: string; studentId: string; streak?: number; lastActiveDate?: string; lastStreakUpdate?: string };
 type Assignment = { id: number; name: string; dueDate: string };
 type Exam = { id: number; courseName: string; examDate: string };
 
@@ -73,22 +74,59 @@ export default function ProfileScreen() {
     return () => unsubscribeAuth();
   }, []);
 
+  const checkAndResetStreak = async (uid: string, userData: UserData) => {
+    const now = new Date('2025-05-18');
+    const today = now.toISOString().split('T')[0];
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    const lastActiveDate = userData.lastActiveDate || null;
+    let streak = userData.streak || 0;
+
+    if (lastActiveDate && lastActiveDate < yesterdayStr) {
+      streak = 0;
+      const userRef = doc(db, 'users', uid);
+      try {
+        await updateDoc(userRef, {
+          streak: 0,
+          lastActiveDate: today,
+          lastStreakUpdate: undefined,
+        });
+        setUserData((prev) => prev ? { 
+          ...prev, 
+          streak: 0,
+          lastActiveDate: today,
+          lastStreakUpdate: undefined 
+        } : prev);
+      } catch (error) {
+        console.error('Error resetting streak:', error);
+        showAlert('Failed to reset streak.');
+      }
+    }
+  };
+
   const fetchUserData = async (uid: string) => {
     try {
       const userRef = doc(db, `users/${uid}`);
       const userSnap = await getDoc(userRef);
       if (userSnap.exists()) {
         const data = userSnap.data() as UserData;
-        setUserData({
+        const userData = {
           firstName: data.firstName || '',
           lastName: data.lastName || '',
           studentId: data.studentId || '',
-        });
+          streak: data.streak || 0,
+          lastActiveDate: data.lastActiveDate || '',
+          lastStreakUpdate: data.lastStreakUpdate || '',
+        };
+        setUserData(userData);
         setEditData({
           firstName: data.firstName || '',
           lastName: data.lastName || '',
           studentId: data.studentId || '',
         });
+        await checkAndResetStreak(uid, userData);
       } else {
         showAlert('User data not found.');
       }
@@ -101,14 +139,32 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (!userId) return;
 
+    const userRef = doc(db, 'users', userId);
+    const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data() as UserData;
+        setUserData({
+          firstName: data.firstName || '',
+          lastName: data.lastName || '',
+          studentId: data.studentId || '',
+          streak: data.streak || 0,
+          lastActiveDate: data.lastActiveDate || '',
+          lastStreakUpdate: data.lastStreakUpdate || '',
+        });
+      }
+    }, (error) => {
+      console.error('Error listening to user data:', error);
+      showAlert('Failed to load user data in real time.');
+    });
+
     const coursesCollection = collection(db, `users/${userId}/courses`);
-    const unsubscribe = onSnapshot(
+    const unsubscribeCourses = onSnapshot(
       coursesCollection,
       (querySnapshot) => {
         const fetchedCourses: Course[] = querySnapshot.docs.map((doc) => ({
           id: Number(doc.id),
           title: doc.data().title,
-          tasks: doc.data().tasks || [],
+          topics: doc.data().topics || [],
         }));
         setCourses(fetchedCourses);
       },
@@ -118,20 +174,32 @@ export default function ProfileScreen() {
       }
     );
 
-    return () => unsubscribe();
+    const assignmentsCollection = collection(db, `users/${userId}/assignments`);
+    const unsubscribeAssignments = onSnapshot(
+      assignmentsCollection,
+      (querySnapshot) => {
+        const fetchedAssignments: Assignment[] = querySnapshot.docs.map((doc) => ({
+          id: Number(doc.id),
+          name: doc.data().name,
+          dueDate: doc.data().dueDate,
+        }));
+        setAssignments(fetchedAssignments);
+      },
+      (error) => {
+        console.error('Error listening to assignments:', error);
+        showAlert('Failed to load assignments in real time.');
+      }
+    );
+
+    return () => {
+      unsubscribeUser();
+      unsubscribeCourses();
+      unsubscribeAssignments();
+    };
   }, [userId]);
 
   const fetchCalendarData = async (uid: string) => {
     try {
-      const assignmentsCollection = collection(db, `users/${uid}/assignments`);
-      const assignmentsSnapshot = await getDocs(assignmentsCollection);
-      const fetchedAssignments: Assignment[] = assignmentsSnapshot.docs.map((doc) => ({
-        id: Number(doc.id),
-        name: doc.data().name,
-        dueDate: doc.data().dueDate,
-      }));
-      setAssignments(fetchedAssignments);
-
       const examsCollection = collection(db, `users/${uid}/exams`);
       const examsSnapshot = await getDocs(examsCollection);
       const fetchedExams: Exam[] = examsSnapshot.docs.map((doc) => ({
@@ -147,27 +215,26 @@ export default function ProfileScreen() {
   };
 
   const calculateOverallProgress = () => {
-    const allTasks = courses.flatMap((c) => c.tasks);
-    return allTasks.length
-      ? allTasks.filter((t) => t.done).length / allTasks.length
+    const allTopics = courses.flatMap((c) => c.topics);
+    return allTopics.length
+      ? allTopics.filter((t) => t.done).length / allTopics.length
       : 0;
   };
 
   const calculateDDay = () => {
-    const now = new Date('2025-05-18'); // Current date: May 18, 2025
+    const now = new Date('2025-05-18');
     const allDates = [
       ...assignments.map((a) => new Date(a.dueDate)),
       ...exams.map((e) => new Date(e.examDate)),
-    ].filter((d) => !isNaN(d.getTime())); // Valid dates only
+    ].filter((d) => !isNaN(d.getTime()));
     if (allDates.length === 0) return 'N/A';
     const earliestDate = new Date(Math.min(...allDates.map((d) => d.getTime())));
     const diffTime = earliestDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays >= 0 ? diffDays.toString() : '0'; // Show days left, or 0 if past due
+    return diffDays >= 0 ? diffDays.toString() : '0';
   };
 
   const calculateAssignmentLeft = () => {
-    // Since there's no 'completed' field, assuming all assignments and exams are pending
     return assignments.length;
   };
 
@@ -197,7 +264,7 @@ export default function ProfileScreen() {
     try {
       const userRef = doc(db, `users/${userId}`);
       await updateDoc(userRef, editData);
-      setUserData({ ...editData });
+      setUserData({ ...userData, ...editData });
       setIsEditVisible(false);
       showAlert('Profile updated successfully!');
     } catch (error) {
@@ -212,7 +279,6 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView contentContainerStyle={styles.container}>
-      {/* Header with Settings Icon */}
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.settingsIcon}
@@ -222,28 +288,32 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Profile Icon Overlapping White Card */}
       <View style={styles.profileIcon}>
         <Ionicons name="person" size={60 * scaleFactor} color="#fff" />
       </View>
 
-      {/* White Card */}
       <View style={styles.whiteCard}>
-        <Text style={styles.name}>
+        <AppText style={styles.name} bold>
           {userData ? `${userData.firstName} ${userData.lastName}` : 'Loading...'}
-        </Text>
-        <Text style={styles.studentId}>
+        </AppText>
+        <AppText style={styles.studentId}>
           {userData ? userData.studentId : 'Loading...'}
-        </Text>
+        </AppText>
         <View style={styles.divider} />
 
-        <Text style={styles.sectionTitle}>Courses</Text>
+        <AppText style={styles.sectionTitle} bold>
+          Courses
+        </AppText>
         <View style={styles.coursesGrid}>
           {courses.map((course) => (
             <View key={course.id} style={styles.courseBox}>
-              <Text style={styles.courseText} numberOfLines={2} ellipsizeMode="tail">
+              <AppText
+                style={styles.courseText}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
                 {course.title}
-              </Text>
+              </AppText>
             </View>
           ))}
           {Array.from({ length: Math.max(0, 8 - courses.length) }).map((_, index) => (
@@ -251,21 +321,27 @@ export default function ProfileScreen() {
           ))}
         </View>
 
-        <Text style={styles.sectionTitle}>Overview</Text>
+        <AppText style={styles.sectionTitle} bold>
+          Overview
+        </AppText>
         <View style={styles.overviewGrid}>
           <View style={styles.overviewBox}>
-            <Text style={styles.overviewText}>Streak: 0</Text>
+            <AppText style={styles.overviewText}>
+              Streak: {userData?.streak || 0} days 🔥
+            </AppText>
           </View>
           <View style={styles.overviewBox}>
             <TouchableOpacity onPress={() => router.push('/calendar')}>
-              <Text style={styles.overviewText}>D-Day: {calculateDDay()}</Text>
+              <AppText style={styles.overviewText}>
+                D-Day: {calculateDDay()}
+              </AppText>
             </TouchableOpacity>
           </View>
           <View style={styles.overviewBox}>
             <TouchableOpacity onPress={() => router.push('/calendar')}>
-              <Text style={styles.overviewText}>
+              <AppText style={styles.overviewText}>
                 Assignment Left: {calculateAssignmentLeft()}
-              </Text>
+              </AppText>
             </TouchableOpacity>
           </View>
           <View style={styles.overviewBox}>
@@ -281,13 +357,15 @@ export default function ProfileScreen() {
                   rotation={0}
                 />
                 <View style={styles.innerCircleWrapper}>
-                  <Text style={[styles.chartTitle, { fontSize: circleFontSize }]}>
+                  <AppText style={[styles.chartTitle, { fontSize: circleFontSize }]} bold>
                     {Math.round(overallProgress * 100)}%
-                  </Text>
+                  </AppText>
                 </View>
               </View>
             </View>
-            <Text style={styles.overviewText}>Progress</Text>
+            <AppText style={styles.overviewText}>
+              Progress
+            </AppText>
           </View>
         </View>
       </View>
@@ -299,10 +377,14 @@ export default function ProfileScreen() {
       >
         <View style={styles.modalContent}>
           <TouchableOpacity onPress={handleEditUserData} style={styles.modalOption}>
-            <Text style={styles.modalText}>Edit User Data</Text>
+            <AppText style={styles.modalText}>
+              Edit User Data
+            </AppText>
           </TouchableOpacity>
           <TouchableOpacity onPress={handleLogout} style={styles.modalOption}>
-            <Text style={styles.modalText}>Logout</Text>
+            <AppText style={styles.modalText}>
+              Logout
+            </AppText>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -313,7 +395,9 @@ export default function ProfileScreen() {
         style={styles.modal}
       >
         <View style={styles.modalContent}>
-          <Text style={styles.modalTitle}>Edit Profile</Text>
+          <AppText style={styles.modalTitle} bold>
+            Edit Profile
+          </AppText>
           <TextInput
             style={styles.input}
             value={editData.firstName}
@@ -335,8 +419,10 @@ export default function ProfileScreen() {
             placeholder="Student ID"
             keyboardType="numeric"
           />
-          <TouchableOpacity onPress={saveEditData} style={styles.saveButton}>
-            <Text style={styles.saveButtonText}>Save</Text>
+          <TouchableOpacity onPress={saveEditData} style={styles.modalOption}>
+            <AppText style={styles.saveButtonText}>
+              Save
+            </AppText>
           </TouchableOpacity>
         </View>
       </Modal>
@@ -344,7 +430,36 @@ export default function ProfileScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = StyleSheet.create<{
+  container: ViewStyle;
+  header: ViewStyle;
+  profileIcon: ViewStyle;
+  settingsIcon: ViewStyle;
+  whiteCard: ViewStyle;
+  divider: ViewStyle;
+  coursesGrid: ViewStyle;
+  courseBox: ViewStyle;
+  overviewGrid: ViewStyle;
+  overviewBox: ViewStyle;
+  progressCircleWrapper: ViewStyle;
+  chartContainer: ViewStyle;
+  backgroundCircle: ViewStyle;
+  innerCircleWrapper: ViewStyle;
+  modal: ViewStyle;
+  modalContent: ViewStyle;
+  modalOption: ViewStyle;
+  saveButton: ViewStyle;
+  name: TextStyle;
+  studentId: TextStyle;
+  sectionTitle: TextStyle;
+  courseText: TextStyle;
+  overviewText: TextStyle;
+  chartTitle: TextStyle;
+  modalText: TextStyle;
+  modalTitle: TextStyle;
+  input: TextStyle;
+  saveButtonText: TextStyle;
+}>({
   container: {
     flexGrow: 1,
     backgroundColor: '#FBEB77',
@@ -368,7 +483,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 50 * scaleFactor,
     left: '50%',
-    marginLeft: -45 * scaleFactor, // Adjusted to center (half of width)
+    marginLeft: -45 * scaleFactor,
     zIndex: 5,
   },
   settingsIcon: {
@@ -378,7 +493,7 @@ const styles = StyleSheet.create({
     marginTop: 100 * scaleFactor,
     backgroundColor: '#fff',
     borderRadius: 30,
-    paddingTop: 50 * scaleFactor, // Increased to account for profileIcon overlap
+    paddingTop: 50 * scaleFactor,
     padding: 20 * scaleFactor,
     width: '100%',
     shadowColor: '#000',
@@ -389,13 +504,10 @@ const styles = StyleSheet.create({
   },
   name: {
     fontSize: isDesktop ? 30 * scaleFactor : 24 * scaleFactor,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
     textAlign: 'center',
   },
   studentId: {
     fontSize: isDesktop ? 20 * scaleFactor : 16 * scaleFactor,
-    fontFamily: 'Cochin',
     color: '#555',
     textAlign: 'center',
     marginVertical: 5 * scaleFactor,
@@ -407,8 +519,6 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: isDesktop ? 24 * scaleFactor : 20 * scaleFactor,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
     marginVertical: 10 * scaleFactor,
   },
   coursesGrid: {
@@ -420,7 +530,7 @@ const styles = StyleSheet.create({
   courseBox: {
     width: isDesktop ? '18%' : '22%',
     aspectRatio: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#B9E184',
     marginBottom: 10 * scaleFactor,
     justifyContent: 'center',
     alignItems: 'center',
@@ -428,13 +538,12 @@ const styles = StyleSheet.create({
   },
   courseText: {
     color: '#fff',
-    fontSize: isDesktop ? 14 * scaleFactor : 12 * scaleFactor,
-    fontFamily: 'Cochin',
+    fontSize: isDesktop ? 16 * scaleFactor : 16 * scaleFactor,
     textAlign: 'center',
     paddingHorizontal: 5 * scaleFactor,
     paddingVertical: 2 * scaleFactor,
-    flexWrap: 'wrap',
-    maxWidth: '90%', // Ensure text stays within box
+    flexWrap: 'wrap' as const,
+    maxWidth: '90%',
   },
   overviewGrid: {
     flexDirection: 'row',
@@ -475,13 +584,10 @@ const styles = StyleSheet.create({
   },
   chartTitle: {
     color: '#fff',
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
   },
   overviewText: {
     color: '#fff',
     fontSize: isDesktop ? 18 * scaleFactor : 16 * scaleFactor,
-    fontFamily: 'Cochin',
     marginTop: 5 * scaleFactor,
   },
   modal: {
@@ -501,12 +607,10 @@ const styles = StyleSheet.create({
   },
   modalText: {
     fontSize: isDesktop ? 18 * scaleFactor : 16 * scaleFactor,
-    fontFamily: 'Cochin',
+    textAlign: 'center',
   },
   modalTitle: {
     fontSize: isDesktop ? 24 * scaleFactor : 20 * scaleFactor,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
     marginBottom: 15 * scaleFactor,
     textAlign: 'center',
   },
@@ -518,7 +622,7 @@ const styles = StyleSheet.create({
     marginBottom: 10 * scaleFactor,
     paddingHorizontal: 10 * scaleFactor,
     fontSize: isDesktop ? 16 * scaleFactor : 14 * scaleFactor,
-    fontFamily: 'Cochin',
+    fontFamily: 'CheapAsChipsDEMO',
   },
   saveButton: {
     backgroundColor: '#648dcb',
@@ -530,6 +634,6 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#fff',
     fontSize: isDesktop ? 16 * scaleFactor : 14 * scaleFactor,
-    fontFamily: 'Cochin',
+    textAlign: 'center',
   },
 });

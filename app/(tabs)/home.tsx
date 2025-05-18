@@ -1,4 +1,3 @@
-// app/home.tsx
 import { auth } from "@/firebaseConfig";
 import { signOut } from "firebase/auth";
 import { useRouter } from "expo-router";
@@ -7,7 +6,16 @@ import DailyCount from "@/components/Homepage/DailyCount";
 import Calendar from "@/components/Homepage/Calendar";
 import DeadlineList from "@/components/Homepage/DeadlineList";
 import CourseProgressList from "@/components/Homepage/CourseProgressList";
-import { View, Text, Alert, Platform, StyleSheet } from "react-native";
+import {
+  View,
+  Alert,
+  Platform,
+  StyleSheet,
+  ScrollView,
+  ViewStyle,
+  TextStyle,
+} from "react-native";
+import { AppText } from "@/components/AppText";
 
 const showAlert = (message: string) => {
   if (Platform.OS === "web") {
@@ -19,42 +27,64 @@ const showAlert = (message: string) => {
 
 export default function HomeScreen() {
   return (
-    <View style={styles.container}>
-      <View style={styles.wrapper}>
-        <View style={styles.taskContainer}>
-          <TaskList />
-        </View>
-        <View style={styles.countContainer}>
-          <DailyCount dayCount={8} />
+    <ScrollView contentContainerStyle={styles.scrollContainer}>
+      <View style={styles.topContainer}>
+        <View style={styles.wrapper}>
+          <View style={styles.taskContainer}>
+            <TaskList />
+          </View>
+          <View style={styles.countContainer}>
+            <DailyCount />
+          </View>
         </View>
       </View>
+
       <View style={styles.calendarContainer}>
         <Calendar />
       </View>
+
       <View>
-        <Text style={styles.upcomingContainer}>Upcoming Events</Text>
+        <AppText style={styles.upcomingContainer} bold>Upcoming Events</AppText>
         <View style={styles.deadlineContainer}>
           <DeadlineList />
         </View>
       </View>
+
       <View style={styles.courseProgressContainer}>
         <CourseProgressList />
       </View>
-    </View>
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
+const styles = StyleSheet.create<{
+  scrollContainer: ViewStyle;
+  topContainer: ViewStyle;
+  wrapper: ViewStyle;
+  taskContainer: ViewStyle;
+  countContainer: ViewStyle;
+  calendarContainer: ViewStyle;
+  upcomingContainer: TextStyle;
+  deadlineContainer: ViewStyle;
+  courseProgressContainer: ViewStyle;
+}>({
+  scrollContainer: {
     padding: 20,
     backgroundColor: "#FBEB77",
+    paddingBottom: 40,
+    justifyContent: "center",
+  },
+  topContainer: {
+    flex: 1,
+    backgroundColor: "#FBEB77",
+    justifyContent: "center",
+    alignItems: "center",
   },
   wrapper: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 14,
   },
   taskContainer: {
     flex: 1,
@@ -64,9 +94,10 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   calendarContainer: {
-    width: 250,
+    alignSelf: "center",
     justifyContent: "center",
-    alignContent: "center",
+    alignItems: "center",
+    marginTop: 8,
   },
   upcomingContainer: {
     backgroundColor: "#648DCB",
@@ -76,9 +107,10 @@ const styles = StyleSheet.create({
     color: "#fff",
     textAlign: "left",
     overflow: "hidden",
-    alignSelf: "flex-start", // fit to text width
-    fontWeight: "600",
+    alignSelf: "flex-start",
     fontSize: 16,
+    fontFamily: "CheapAsChipsDEMO",
+    fontWeight: "600",
     marginTop: 10,
   },
   deadlineContainer: {

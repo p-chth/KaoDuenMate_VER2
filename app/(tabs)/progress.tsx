@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
   View,
-  Text,
   ScrollView,
   TouchableOpacity,
   TextInput,
@@ -10,27 +9,27 @@ import {
 } from 'react-native';
 import { AnimatedCircularProgress } from 'react-native-circular-progress';
 import { Ionicons } from '@expo/vector-icons';
-import { collection, doc, setDoc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, getDocs, deleteDoc, updateDoc } from 'firebase/firestore';
 import { onAuthStateChanged } from 'firebase/auth';
-import { db, auth } from '@/firebaseConfig'; // Adjust path to your firebase.ts file
+import { AppText } from '@/components/AppText';
+import { db, auth } from '@/firebaseConfig';
 
-type Task = { id: number; title: string; done: boolean };
-type Course = { id: number; title: string; tasks: Task[]; expanded: boolean };
+type Topic = { id: number; title: string; done: boolean };
+type Course = { id: number; title: string; topics: Topic[]; expanded: boolean };
 
 export default function ProgressScreen() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [overallProgress, setOverallProgress] = useState(0);
-  const [editingTask, setEditingTask] = useState<{
+  const [editingTopic, setEditingTopic] = useState<{
     courseId: number;
-    taskId: number;
+    topicId: number;
   } | null>(null);
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
   const [newCourseTitle, setNewCourseTitle] = useState<string>('');
-  const [editingTaskTitle, setEditingTaskTitle] = useState<string>('');
+  const [editingTopicTitle, setEditingTopicTitle] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
-  // Listen for auth state changes
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
@@ -45,16 +44,15 @@ export default function ProgressScreen() {
     return () => unsubscribe();
   }, []);
 
-  // Fetch courses from Firestore
   const fetchCourses = async (uid: string) => {
     try {
-      setLoading(true); 
+      setLoading(true);
       const coursesCollection = collection(db, `users/${uid}/courses`);
       const querySnapshot = await getDocs(coursesCollection);
       const fetchedCourses: Course[] = querySnapshot.docs.map((doc) => ({
         id: Number(doc.id),
         title: doc.data().title,
-        tasks: doc.data().tasks || [],
+        topics: doc.data().topics || [],
         expanded: false,
       }));
       setCourses(fetchedCourses);
@@ -62,12 +60,10 @@ export default function ProgressScreen() {
       console.error('Error fetching courses:', error);
       Alert.alert('Error', 'Failed to load courses.');
     } finally {
-      setLoading(false); 
+      setLoading(false);
     }
   };
-  
 
-  // Add a new course
   const addCourse = async () => {
     if (!userId) {
       Alert.alert('Error', 'You must be signed in to add a course.');
@@ -76,14 +72,14 @@ export default function ProgressScreen() {
     const newCourse: Course = {
       id: Date.now(),
       title: `Course ${courses.length + 1}`,
-      tasks: [],
+      topics: [],
       expanded: false,
     };
     try {
       const courseRef = doc(db, `users/${userId}/courses/${newCourse.id}`);
       await setDoc(courseRef, {
         title: newCourse.title,
-        tasks: newCourse.tasks,
+        topics: newCourse.topics,
       });
       setCourses((prev) => [...prev, newCourse]);
     } catch (error) {
@@ -92,7 +88,6 @@ export default function ProgressScreen() {
     }
   };
 
-  // Delete a course
   const deleteCourse = async (id: number) => {
     if (!userId) return;
     try {
@@ -105,39 +100,39 @@ export default function ProgressScreen() {
     }
   };
 
-  // Toggle task done status
-  const toggleTaskDone = async (courseId: number, taskId: number) => {
+  const toggleTopicDone = async (courseId: number, topicId: number) => {
     if (!userId) return;
     try {
       const updatedCourses = courses.map((course) =>
         course.id === courseId
           ? {
               ...course,
-              tasks: course.tasks.map((t) =>
-                t.id === taskId ? { ...t, done: !t.done } : t
+              topics: course.topics.map((t) =>
+                t.id === topicId ? { ...t, done: !t.done } : t
               ),
             }
           : course
       );
       const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
       await updateDoc(courseRef, {
-        tasks: updatedCourses.find((c) => c.id === courseId)?.tasks,
+        topics: updatedCourses.find((c) => c.id === courseId)?.topics,
       });
       setCourses(updatedCourses);
+      if (updatedCourses.find((c) => c.id === courseId)?.topics.find((t) => t.id === topicId)?.done) {
+        await updateStreak();
+      }
     } catch (error) {
-      console.error('Error toggling task:', error);
-      Alert.alert('Error', 'Failed to update task.');
+      console.error('Error toggling topic:', error);
+      Alert.alert('Error', 'Failed to update topic.');
     }
   };
 
-  // Add a new task
-  const addTask = async (courseId: number) => {
+  const addTopic = async (courseId: number) => {
     if (!userId) {
-      Alert.alert('Error', 'You must be signed in to add a task.');
+      Alert.alert('Error', 'You must be signed in to add a topic.');
       return;
     }
-    // Debug log to check courses and courseId
-    console.log('addTask: courseId:', courseId, 'courses:', courses);
+    console.log('addTopic: courseId:', courseId, 'courses:', courses);
     
     const course = courses.find((c) => c.id === courseId);
     if (!course) {
@@ -145,52 +140,50 @@ export default function ProgressScreen() {
       return;
     }
     
-    const newTask: Task = {
+    const newTopic: Topic = {
       id: Date.now(),
-      title: `Task ${course.tasks.length + 1}`,
+      title: `Topic ${course.topics.length + 1}`,
       done: false,
     };
     try {
       const updatedCourses = courses.map((course) =>
         course.id === courseId
-          ? { ...course, tasks: [...course.tasks, newTask] }
+          ? { ...course, topics: [...course.topics, newTopic] }
           : course
       );
       const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
       await updateDoc(courseRef, {
-        tasks: updatedCourses.find((c) => c.id === courseId)?.tasks,
+        topics: updatedCourses.find((c) => c.id === courseId)?.topics,
       });
       setCourses(updatedCourses);
     } catch (error) {
-      console.error('Error adding task:', error);
-      Alert.alert('Error', 'Failed to add task.');
+      console.error('Error adding topic:', error);
+      Alert.alert('Error', 'Failed to add topic.');
     }
   };
 
-  // Delete a task
-  const deleteTask = async (courseId: number, taskId: number) => {
+  const deleteTopic = async (courseId: number, topicId: number) => {
     if (!userId) return;
     try {
       const updatedCourses = courses.map((course) =>
         course.id === courseId
           ? {
               ...course,
-              tasks: course.tasks.filter((t) => t.id !== taskId),
+              topics: course.topics.filter((t) => t.id !== topicId),
             }
           : course
       );
       const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
       await updateDoc(courseRef, {
-        tasks: updatedCourses.find((c) => c.id === courseId)?.tasks,
+        topics: updatedCourses.find((c) => c.id === courseId)?.topics,
       });
       setCourses(updatedCourses);
     } catch (error) {
-      console.error('Error deleting task:', error);
-      Alert.alert('Error', 'Failed to delete task.');
+      console.error('Error deleting topic:', error);
+      Alert.alert('Error', 'Failed to delete topic.');
     }
   };
 
-  // Toggle course expansion
   const toggleExpand = (id: number) => {
     setCourses((prevCourses) =>
       prevCourses.map((course) =>
@@ -200,12 +193,10 @@ export default function ProgressScreen() {
       )
     );
   };
-  
 
-  // Update task title
-  const updateTaskTitle = async (
+  const updateTopicTitle = async (
     courseId: number,
-    taskId: number,
+    topicId: number,
     newTitle: string
   ) => {
     if (!userId) return;
@@ -214,24 +205,23 @@ export default function ProgressScreen() {
         course.id === courseId
           ? {
               ...course,
-              tasks: course.tasks.map((t) =>
-                t.id === taskId ? { ...t, title: newTitle } : t
+              topics: course.topics.map((t) =>
+                t.id === topicId ? { ...t, title: newTitle } : t
               ),
             }
           : course
       );
       const courseRef = doc(db, `users/${userId}/courses/${courseId}`);
       await updateDoc(courseRef, {
-        tasks: updatedCourses.find((c) => c.id === courseId)?.tasks,
+        topics: updatedCourses.find((c) => c.id === courseId)?.topics,
       });
       setCourses(updatedCourses);
     } catch (error) {
-      console.error('Error updating task title:', error);
-      Alert.alert('Error', 'Failed to update task title.');
+      console.error('Error updating topic title:', error);
+      Alert.alert('Error', 'Failed to update topic title.');
     }
   };
 
-  // Update course title
   const updateCourseTitle = async (courseId: number, newTitle: string) => {
     if (!userId) return;
     try {
@@ -248,13 +238,49 @@ export default function ProgressScreen() {
     }
   };
 
-  const calculateCourseProgress = (tasks: Task[]) =>
-    tasks.length ? tasks.filter((t) => t.done).length / tasks.length : 0;
+  const updateStreak = async () => {
+    if (!userId) return;
+    const now = new Date('2025-05-18');
+    const today = now.toISOString().split('T')[0];
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await getDoc(userRef);
+    let streak = userDoc.exists() && userDoc.data().streak ? userDoc.data().streak : 0;
+    const lastActiveDate = userDoc.exists() && userDoc.data().lastActiveDate ? userDoc.data().lastActiveDate : null;
+    const lastStreakUpdate = userDoc.exists() && userDoc.data().lastStreakUpdate ? userDoc.data().lastStreakUpdate : null;
+
+    const yesterday = new Date(now);
+    yesterday.setDate(now.getDate() - 1);
+    const yesterdayStr = yesterday.toISOString().split('T')[0];
+
+    if (lastStreakUpdate === today) {
+      return;
+    }
+
+    if (!lastActiveDate || lastActiveDate < yesterdayStr) {
+      streak = 1;
+    } else if (lastActiveDate === today || lastActiveDate === yesterdayStr) {
+      streak += 1;
+    }
+
+    try {
+      await updateDoc(userRef, {
+        streak: streak,
+        lastActiveDate: today,
+        lastStreakUpdate: today,
+      });
+    } catch (error) {
+      console.error('Error updating streak:', error);
+      Alert.alert('Error', 'Failed to update streak.');
+    }
+  };
+
+  const calculateCourseProgress = (topics: Topic[]) =>
+    topics.length ? topics.filter((t) => t.done).length / topics.length : 0;
 
   const calculateOverallProgress = () => {
-    const allTasks = courses.flatMap((c) => c.tasks);
-    return allTasks.length
-      ? allTasks.filter((t) => t.done).length / allTasks.length
+    const allTopics = courses.flatMap((c) => c.topics);
+    return allTopics.length
+      ? allTopics.filter((t) => t.done).length / allTopics.length
       : 0;
   };
 
@@ -265,7 +291,6 @@ export default function ProgressScreen() {
   return (
     <ScrollView contentContainerStyle={styles.container}>
       <View style={styles.relativeWrapper}>
-        {/* Circular Progress */}
         <View style={styles.progressCircleWrapper}>
           <View style={styles.chartContainer}>
             <View style={styles.backgroundCircle} />
@@ -279,18 +304,21 @@ export default function ProgressScreen() {
             />
             <View style={styles.innerCircleWrapper}>
               <View style={styles.textContainer}>
-                <Text style={styles.chartTitle}>Progress</Text>
-                <Text style={styles.chartTitle}>chart</Text>
+                <AppText style={styles.chartTitle} bold>
+                  Progress
+                </AppText>
+                <AppText style={styles.chartTitle} bold>
+                  chart
+                </AppText>
               </View>
             </View>
           </View>
         </View>
 
-        {/* White Card Box */}
         <View style={styles.whiteCard}>
           <View style={{ marginTop: 50 }}></View>
           {courses.map((course) => {
-            const courseProgress = calculateCourseProgress(course.tasks);
+            const courseProgress = calculateCourseProgress(course.topics);
             return (
               <View key={course.id} style={styles.courseCard}>
                 <View style={styles.courseHeader}>
@@ -329,7 +357,9 @@ export default function ProgressScreen() {
                       }}
                       style={{ flex: 1 }}
                     >
-                      <Text style={styles.courseTitle}>{course.title}</Text>
+                      <AppText style={styles.courseTitle} bold>
+                        {course.title}
+                      </AppText>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity onPress={() => deleteCourse(course.id)}>
@@ -344,65 +374,69 @@ export default function ProgressScreen() {
                     />
                     <View style={{ flex: 1 - courseProgress }} />
                   </View>
-                  <Text style={styles.percentText}>
+                  <AppText style={styles.percentText} bold>
                     {Math.round(courseProgress * 100)}%
-                  </Text>
+                  </AppText>
                 </View>
 
                 {course.expanded && (
                   <>
-                    {course.tasks.map((task) => (
-                      <View key={task.id} style={styles.taskItem}>
+                    {course.topics.map((topic) => (
+                      <View key={topic.id} style={styles.topicItem}>
                         <TouchableOpacity
-                          onPress={() => toggleTaskDone(course.id, task.id)}
+                          onPress={() => toggleTopicDone(course.id, topic.id)}
                         >
                           <Ionicons
-                            name={task.done ? 'checkbox' : 'square-outline'}
+                            name={topic.done ? 'checkbox' : 'square-outline'}
                             size={20}
                             color="black"
                           />
                         </TouchableOpacity>
 
-                        {editingTask?.courseId === course.id &&
-                        editingTask?.taskId === task.id ? (
+                        {editingTopic?.courseId === course.id &&
+                        editingTopic?.topicId === topic.id ? (
                           <TextInput
-                            style={styles.taskInput}
-                            value={editingTaskTitle}
-                            onChangeText={setEditingTaskTitle}
+                            style={styles.topicInput}
+                            value={editingTopicTitle}
+                            onChangeText={setEditingTopicTitle}
                             onBlur={() => {
-                              updateTaskTitle(
+                              updateTopicTitle(
                                 course.id,
-                                task.id,
-                                editingTaskTitle.trim() || task.title
+                                topic.id,
+                                editingTopicTitle.trim() || topic.title
                               );
-                              setEditingTask(null);
+                              setEditingTopic(null);
                             }}
                             autoFocus
                           />
                         ) : (
                           <TouchableOpacity
                             onPress={() => {
-                              setEditingTask({
+                              setEditingTopic({
                                 courseId: course.id,
-                                taskId: task.id,
+                                topicId: topic.id,
                               });
-                              setEditingTaskTitle(task.title);
+                              setEditingTopicTitle(topic.title);
                             }}
                             style={{ flex: 1 }}
                           >
-                            <Text style={styles.taskText}>{task.title}</Text>
+                            <AppText style={styles.topicText}>
+                              {topic.title}
+                            </AppText>
                           </TouchableOpacity>
                         )}
 
                         <TouchableOpacity
-                          onPress={() => deleteTask(course.id, task.id)}
+                          onPress={() => deleteTopic(course.id, topic.id)}
                         >
                           <Ionicons name="trash-bin" size={20} color="#6C6868" />
                         </TouchableOpacity>
                       </View>
                     ))}
-                    <TouchableOpacity onPress={() => addTask(course.id)}>
-                      <Text style={styles.addTaskText}>+ add task</Text>
+                    <TouchableOpacity onPress={() => addTopic(course.id)}>
+                      <AppText style={styles.addTopicText} bold>
+                        + add topic
+                      </AppText>
                     </TouchableOpacity>
                   </>
                 )}
@@ -411,7 +445,9 @@ export default function ProgressScreen() {
           })}
 
           <TouchableOpacity onPress={addCourse} disabled={loading} style={styles.addCourseButton}>
-            <Text style={styles.addCourseText}>+ add course</Text>
+            <AppText style={styles.addCourseText} bold>
+              + add course
+            </AppText>
           </TouchableOpacity>
         </View>
       </View>
@@ -466,8 +502,6 @@ const styles = StyleSheet.create({
   chartTitle: {
     color: 'white',
     fontSize: 20,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
   },
   whiteCard: {
     marginTop: 130,
@@ -498,19 +532,16 @@ const styles = StyleSheet.create({
     paddingRight: 5,
   },
   courseTitle: {
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
     fontSize: 16,
     flex: 1,
   },
   courseTitleInput: {
-    fontWeight: 'bold',
     fontSize: 16,
-    fontFamily: 'Cochin',
     borderBottomWidth: 1,
     borderColor: '#888',
     paddingVertical: 2,
     flex: 1,
+    fontFamily: 'CheapAsChipsDEMO',
   },
   progressBarWrapper: {
     flexDirection: 'row',
@@ -530,30 +561,29 @@ const styles = StyleSheet.create({
     borderRadius: 3,
   },
   percentText: {
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
+    fontSize: 14,
   },
-  taskItem: {
+  topicItem: {
     flexDirection: 'row',
     alignItems: 'center',
     marginVertical: 5,
     gap: 10,
   },
-  taskText: {
+  topicText: {
     flex: 1,
-    fontFamily: 'Cochin',
+    fontSize: 14,
   },
-  taskInput: {
+  topicInput: {
     flex: 1,
     borderBottomWidth: 1,
     borderColor: '#888',
     paddingVertical: 2,
+    fontFamily: 'CheapAsChipsDEMO',
   },
-  addTaskText: {
+  addTopicText: {
     color: '#000',
     marginTop: 5,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
+    fontSize: 14,
   },
   addCourseButton: {
     marginTop: 20,
@@ -565,7 +595,5 @@ const styles = StyleSheet.create({
   },
   addCourseText: {
     fontSize: 18,
-    fontWeight: 'bold',
-    fontFamily: 'Cochin',
   },
 });
